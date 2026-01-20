@@ -26,7 +26,7 @@ fun CanvasTopAppBar(
     title: String = "",
     contentColor: Color = Color.Transparent,
     titleColor: Color = if (isDarkMode) Color.White else Color.Black,
-    action: @Composable RowScope.() -> Unit = {},
+    actions: @Composable RowScope.() -> Unit = {},
     onBackPressClicked: () -> Unit = {},
     showBackNavIcon: Boolean = false,
     fontSize: TextUnit? = null,
@@ -62,7 +62,7 @@ fun CanvasTopAppBar(
                 )
             }
         },
-        actions = action
+        actions = actions
     )
 }
 

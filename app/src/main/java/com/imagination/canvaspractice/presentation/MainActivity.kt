@@ -9,6 +9,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -27,13 +31,27 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             CanvasPracticeTheme {
+                val viewModel = viewModel<MainViewModel>()
+                val state by viewModel.state.collectAsStateWithLifecycle()
+
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
-                    topBar = { CanvasTopAppBar(title = "Canvas Practice") }
+                    topBar = {
+                        CanvasTopAppBar(
+                            title = "Canvas Practice",
+                            actions = {
+                                IconButton(onClick = {
+                                    viewModel.onAction(DrawingAction.OnClearCanvasClick)
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Delete"
+                                    )
+                                }
+                            }
+                        )
+                    }
                 ) { innerPadding ->
-                    val viewModel = viewModel<MainViewModel>()
-                    val state by viewModel.state.collectAsStateWithLifecycle()
-
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -54,9 +72,6 @@ class MainActivity : ComponentActivity() {
                             colors = allColors,
                             onSelectColor = {
                                 viewModel.onAction(DrawingAction.OnSelectColor(it))
-                            },
-                            onClearCanvas = {
-                                viewModel.onAction(DrawingAction.OnClearCanvasClick)
                             }
                         )
                     }

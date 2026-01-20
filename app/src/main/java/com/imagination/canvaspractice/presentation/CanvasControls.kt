@@ -12,9 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,8 +27,7 @@ fun CanvasControls(
     modifier: Modifier = Modifier,
     selectedColor: Color,
     colors: List<Color>,
-    onSelectColor: (Color) -> Unit,
-    onClearCanvas: () -> Unit
+    onSelectColor: (Color) -> Unit
 ) {
     Row(
         modifier = modifier
@@ -66,10 +63,5 @@ fun CanvasControls(
                     }
             )
         }
-    }
-    Button(
-        onClick = onClearCanvas
-    ) {
-        Text("Clear Canvas")
     }
 }
