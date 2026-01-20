@@ -37,19 +37,33 @@ class MainViewModel : ViewModel() {
             DrawingAction.OnHideColorPicker -> onHideColorPicker()
             is DrawingAction.OnSelectShapeType -> onSelectShapeType(action.shapeType)
             is DrawingAction.OnFontSizeChange -> onFontSizeChange(action.fontSize)
+            is DrawingAction.OnTextInputChange -> onTextInputChange(action.text)
+            is DrawingAction.OnTextInputStart -> onTextInputStart(action.position)
+            DrawingAction.OnTextInputDone -> onTextInputDone()
             is DrawingAction.OnShapeStart -> onShapeStart(action.offset)
             is DrawingAction.OnShapeUpdate -> onShapeUpdate(action.offset)
             DrawingAction.OnShapeEnd -> onShapeEnd()
-            is DrawingAction.OnTextAdd -> onTextAdd(action.position)
         }
     }
 
     private fun onSelectMode(mode: DrawingMode) {
-        _state.update { it.copy(drawingMode = mode) }
+        _state.update { 
+            it.copy(
+                drawingMode = mode,
+                textInputPosition = null,
+                currentTextInput = ""
+            ) 
+        }
     }
 
     private fun onCloseModeOptions() {
-        _state.update { it.copy(drawingMode = null) }
+        _state.update { 
+            it.copy(
+                drawingMode = null,
+                textInputPosition = null,
+                currentTextInput = ""
+            ) 
+        }
     }
 
     private fun onSelectShapeType(shapeType: ShapeType) {
@@ -95,13 +109,30 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    private fun onTextAdd(position: Offset) {
+    private fun onTextInputChange(text: String) {
+        _state.update { it.copy(currentTextInput = text) }
+    }
+
+    private fun onTextInputStart(position: Offset) {
         if (_state.value.drawingMode != DrawingMode.TEXT) return
         _state.update {
             it.copy(
+                textInputPosition = position,
+                currentTextInput = ""
+            )
+        }
+    }
+
+    private fun onTextInputDone() {
+        val position = _state.value.textInputPosition ?: return
+        val textToAdd = _state.value.currentTextInput.ifBlank { "Text" }
+        _state.update {
+            it.copy(
+                textInputPosition = null,
+                currentTextInput = "",
                 textElements = it.textElements + TextData(
                     id = System.currentTimeMillis().toString(),
-                    text = "Text",
+                    text = textToAdd,
                     position = position,
                     color = it.selectedColor,
                     fontSize = it.selectedFontSize
@@ -199,7 +230,9 @@ sealed interface DrawingAction {
     
     // Text actions
     data class OnFontSizeChange(val fontSize: Float): DrawingAction
-    data class OnTextAdd(val position: Offset): DrawingAction
+    data class OnTextInputChange(val text: String): DrawingAction
+    data class OnTextInputStart(val position: Offset): DrawingAction
+    data object OnTextInputDone: DrawingAction
     
     // Canvas actions
     data object OnClearCanvasClick: DrawingAction

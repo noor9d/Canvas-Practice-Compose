@@ -1,5 +1,6 @@
 package com.imagination.canvaspractice.domain.model
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import com.imagination.canvaspractice.domain.constants.DrawingConstants
 
@@ -27,5 +28,7 @@ data class DrawingState(
     val shapeElements: List<ShapeData> = emptyList(),
     val currentShape: ShapeData? = null,
     val selectedShapeType: ShapeType = ShapeType.RECTANGLE,
-    val selectedFontSize: Float = DrawingConstants.DEFAULT_FONT_SIZE
+    val selectedFontSize: Float = DrawingConstants.DEFAULT_FONT_SIZE,
+    val currentTextInput: String = "",
+    val textInputPosition: Offset? = null
 )

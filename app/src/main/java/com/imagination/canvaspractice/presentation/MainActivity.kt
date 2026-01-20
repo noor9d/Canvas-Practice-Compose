@@ -72,6 +72,14 @@ class MainActivity : ComponentActivity() {
                             shapeElements = state.shapeElements,
                             currentShape = state.currentShape,
                             drawingMode = state.drawingMode,
+                            textInputPosition = state.textInputPosition,
+                            textInput = state.currentTextInput,
+                            onTextInputChange = {
+                                viewModel.onAction(DrawingAction.OnTextInputChange(it))
+                            },
+                            onTextInputDone = {
+                                viewModel.onAction(DrawingAction.OnTextInputDone)
+                            },
                             onAction = viewModel::onAction,
                             modifier = Modifier
                                 .fillMaxWidth()
