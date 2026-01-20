@@ -1,0 +1,42 @@
+package com.imagination.canvaspractice.domain.constants
+
+import androidx.compose.ui.graphics.Color
+
+/**
+ * Constants used for drawing functionality
+ */
+object DrawingConstants {
+    /**
+     * Default stroke width for drawing paths
+     */
+    const val DEFAULT_STROKE_WIDTH = 8f
+    
+    /**
+     * Default font size for text elements
+     */
+    const val DEFAULT_FONT_SIZE = 24f
+    
+    /**
+     * Minimum distance threshold for path smoothing (in pixels)
+     * Points closer than this will be smoothed together
+     */
+    const val SMOOTHNESS_THRESHOLD = 5f
+    
+    /**
+     * Available colors for drawing
+     */
+    val AVAILABLE_COLORS = listOf(
+        Color.Black,
+        Color.Red,
+        Color.Blue,
+        Color.Green,
+        Color.Yellow,
+        Color.Magenta,
+        Color.Cyan,
+    )
+    
+    /**
+     * Default drawing color
+     */
+    val DEFAULT_COLOR = Color.Black
+}

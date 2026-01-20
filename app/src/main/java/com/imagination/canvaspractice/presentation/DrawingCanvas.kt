@@ -3,6 +3,7 @@ package com.imagination.canvaspractice.presentation
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -14,38 +15,93 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastForEach
+import com.imagination.canvaspractice.domain.model.DrawingMode
 import com.imagination.canvaspractice.domain.model.PathData
-import kotlin.math.abs
+import com.imagination.canvaspractice.domain.model.ShapeData
+import com.imagination.canvaspractice.domain.model.ShapeType
+import com.imagination.canvaspractice.domain.model.TextData
 
+/**
+ * A composable canvas for drawing with touch gestures
+ * Supports multiple drawing modes: Pen, Text, and Shapes
+ * 
+ * @param modifier Modifier to be applied to the canvas
+ * @param paths List of completed paths to render
+ * @param currentPath The path currently being drawn (if any)
+ * @param textElements List of text elements to render
+ * @param shapeElements List of shape elements to render
+ * @param currentShape The shape currently being drawn (if any)
+ * @param drawingMode The current drawing mode (null means no active mode)
+ * @param onAction Callback for drawing actions
+ */
 @Composable
 fun DrawingCanvas(
     modifier: Modifier = Modifier,
     paths: List<PathData>,
     currentPath: PathData?,
+    textElements: List<TextData>,
+    shapeElements: List<ShapeData>,
+    currentShape: ShapeData?,
+    drawingMode: DrawingMode?,
     onAction: (DrawingAction) -> Unit
 ) {
+    val textMeasurer = rememberTextMeasurer()
+    
     Canvas(
         modifier = modifier
             .clipToBounds()
             .background(Color.White)
-            .pointerInput(true) {
-                detectDragGestures(
-                    onDragStart = {
-                        onAction(DrawingAction.OnNewPathStart)
-                    },
-                    onDragEnd = {
-                        onAction(DrawingAction.OnPathEnd)
-                    },
-                    onDrag = { change, _ ->
-                        onAction(DrawingAction.OnDraw(change.position))
-                    },
-                    onDragCancel = {
-                        onAction(DrawingAction.OnPathEnd)
+            .pointerInput(drawingMode) {
+                when (drawingMode) {
+                    DrawingMode.PEN -> {
+                        detectDragGestures(
+                            onDragStart = {
+                                onAction(DrawingAction.OnNewPathStart)
+                            },
+                            onDragEnd = {
+                                onAction(DrawingAction.OnPathEnd)
+                            },
+                            onDrag = { change, _ ->
+                                onAction(DrawingAction.OnDraw(change.position))
+                            },
+                            onDragCancel = {
+                                onAction(DrawingAction.OnPathEnd)
+                            }
+                        )
                     }
-                )
+                    DrawingMode.SHAPE -> {
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                onAction(DrawingAction.OnShapeStart(offset))
+                            },
+                            onDragEnd = {
+                                onAction(DrawingAction.OnShapeEnd)
+                            },
+                            onDrag = { change, _ ->
+                                onAction(DrawingAction.OnShapeUpdate(change.position))
+                            },
+                            onDragCancel = {
+                                onAction(DrawingAction.OnShapeEnd)
+                            }
+                        )
+                    }
+                    DrawingMode.TEXT -> {
+                        detectTapGestures { offset ->
+                            onAction(DrawingAction.OnTextAdd(offset))
+                        }
+                    }
+                    null -> {
+                        // No gestures when no mode is selected
+                    }
+                }
             }
     ) {
+        // Draw all completed paths
         paths.fastForEach { pathData ->
             drawPath(
                 path = pathData.path,
@@ -53,6 +109,8 @@ fun DrawingCanvas(
                 strokeWidth = pathData.strokeWidth
             )
         }
+        
+        // Draw the current path being drawn
         currentPath?.let {
             drawPath(
                 path = it.path,
@@ -60,33 +118,66 @@ fun DrawingCanvas(
                 strokeWidth = it.strokeWidth
             )
         }
+        
+        // Draw all completed shapes
+        shapeElements.fastForEach { shapeData ->
+            drawShape(shapeData)
+        }
+        
+        // Draw the current shape being drawn
+        currentShape?.let {
+            drawShape(it)
+        }
+        
+        // Draw all text elements
+        textElements.fastForEach { textData ->
+            val textLayoutResult = textMeasurer.measure(
+                text = textData.text,
+                style = TextStyle(
+                    color = textData.color,
+                    fontSize = textData.fontSize.sp
+                )
+            )
+            drawText(
+                textLayoutResult = textLayoutResult,
+                topLeft = textData.position
+            )
+        }
     }
 }
 
+/**
+ * Draws a smoothed path from a list of offsets.
+ * Uses quadratic bezier curves for smooth line rendering.
+ */
 private fun DrawScope.drawPath(
     path: List<Offset>,
     color: Color,
     strokeWidth: Float = 10f
 ) {
+    if (path.isEmpty()) return
+    
     val smoothedPath = Path().apply {
-        if (path.isNotEmpty()) {
-            moveTo(path.first().x, path.first().y)
+        moveTo(path.first().x, path.first().y)
 
-            val smoothness = 5
-            for (i in 1..path.lastIndex) {
-                val from = path[i - 1]
-                val to = path[i]
-                val dx = abs(to.x - from.x)
-                val dy = abs(to.y - from.y)
-                if (dx >= smoothness || dy >= smoothness) {
-                    quadraticTo(
-                        x1 = (from.x + to.x) / 2f,
-                        y1 = (from.y + to.y) / 2f,
-                        x2 = to.x,
-                        y2 = to.y
-                    )
-                }
-            }
+        // Smooth the path using quadratic bezier curves
+        // This creates a more natural drawing experience
+        for (i in 1 until path.size) {
+            val previousPoint = path[i - 1]
+            val currentPoint = path[i]
+            
+            // Use the midpoint as control point for smoother curves
+            val controlPoint = Offset(
+                x = (previousPoint.x + currentPoint.x) / 2f,
+                y = (previousPoint.y + currentPoint.y) / 2f
+            )
+            
+            quadraticTo(
+                x1 = controlPoint.x,
+                y1 = controlPoint.y,
+                x2 = currentPoint.x,
+                y2 = currentPoint.y
+            )
         }
     }
 
@@ -99,4 +190,77 @@ private fun DrawScope.drawPath(
             join = StrokeJoin.Round
         )
     )
+}
+
+/**
+ * Draws a shape based on its type and properties
+ */
+private fun DrawScope.drawShape(shapeData: ShapeData) {
+    val topLeft = shapeData.topLeft
+    val size = shapeData.size
+    
+    val style = if (shapeData.isFilled) {
+        androidx.compose.ui.graphics.drawscope.Fill
+    } else {
+        Stroke(
+            width = shapeData.strokeWidth,
+            cap = StrokeCap.Round,
+            join = StrokeJoin.Round
+        )
+    }
+    
+    when (shapeData.type) {
+        ShapeType.RECTANGLE -> {
+            drawRect(
+                color = shapeData.color,
+                topLeft = topLeft,
+                size = size,
+                style = style
+            )
+        }
+        ShapeType.CIRCLE -> {
+            val radius = kotlin.math.min(size.width, size.height) / 2f
+            val center = Offset(
+                x = topLeft.x + size.width / 2f,
+                y = topLeft.y + size.height / 2f
+            )
+            drawCircle(
+                color = shapeData.color,
+                radius = radius,
+                center = center,
+                style = style
+            )
+        }
+        ShapeType.LINE -> {
+            drawLine(
+                color = shapeData.color,
+                start = shapeData.startPosition,
+                end = shapeData.endPosition,
+                strokeWidth = shapeData.strokeWidth,
+                cap = StrokeCap.Round
+            )
+        }
+        ShapeType.TRIANGLE -> {
+            val path = Path().apply {
+                moveTo(
+                    x = topLeft.x + size.width / 2f,
+                    y = topLeft.y
+                )
+                lineTo(
+                    x = topLeft.x,
+                    y = topLeft.y + size.height
+                )
+                lineTo(
+                    x = topLeft.x + size.width,
+                    y = topLeft.y + size.height
+                )
+                close()
+            }
+            drawPath(
+                path = path,
+                color = shapeData.color,
+                style = style
+            )
+        }
+    }
 }

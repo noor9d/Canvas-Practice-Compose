@@ -22,7 +22,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.imagination.canvaspractice.domain.model.DrawingMode
+import com.imagination.canvaspractice.presentation.components.BottomNavigationBar
 import com.imagination.canvaspractice.presentation.components.CanvasTopAppBar
+import com.imagination.canvaspractice.presentation.components.ColorPickerBar
+import com.imagination.canvaspractice.presentation.components.PenOptionsBar
+import com.imagination.canvaspractice.presentation.components.ShapeOptionsBar
+import com.imagination.canvaspractice.presentation.components.TextOptionsBar
 import com.imagination.canvaspractice.ui.theme.CanvasPracticeTheme
 
 class MainActivity : ComponentActivity() {
@@ -62,18 +68,77 @@ class MainActivity : ComponentActivity() {
                         DrawingCanvas(
                             paths = state.paths,
                             currentPath = state.currentPath,
+                            textElements = state.textElements,
+                            shapeElements = state.shapeElements,
+                            currentShape = state.currentShape,
+                            drawingMode = state.drawingMode,
                             onAction = viewModel::onAction,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f)
                         )
-                        CanvasControls(
-                            selectedColor = state.selectedColor,
-                            colors = allColors,
-                            onSelectColor = {
-                                viewModel.onAction(DrawingAction.OnSelectColor(it))
+                        
+                        // Show color picker bar if visible (above option bars)
+                        if (state.isColorPickerVisible) {
+                            ColorPickerBar(
+                                selectedColor = state.selectedColor,
+                                onSelectColor = {
+                                    viewModel.onAction(DrawingAction.OnSelectColor(it))
+                                }
+                            )
+                        }
+                        
+                        // Show mode-specific options bar or main navigation bar
+                        when (state.drawingMode) {
+                            DrawingMode.PEN -> {
+                                PenOptionsBar(
+                                    selectedColor = state.selectedColor,
+                                    onColorClick = {
+                                        viewModel.onAction(DrawingAction.OnShowColorPicker)
+                                    },
+                                    onClose = {
+                                        viewModel.onAction(DrawingAction.OnCloseModeOptions)
+                                    }
+                                )
                             }
-                        )
+                            DrawingMode.TEXT -> {
+                                TextOptionsBar(
+                                    selectedColor = state.selectedColor,
+                                    fontSize = state.selectedFontSize,
+                                    onColorClick = {
+                                        viewModel.onAction(DrawingAction.OnShowColorPicker)
+                                    },
+                                    onFontSizeChange = {
+                                        viewModel.onAction(DrawingAction.OnFontSizeChange(it))
+                                    },
+                                    onClose = {
+                                        viewModel.onAction(DrawingAction.OnCloseModeOptions)
+                                    }
+                                )
+                            }
+                            DrawingMode.SHAPE -> {
+                                ShapeOptionsBar(
+                                    selectedColor = state.selectedColor,
+                                    selectedShapeType = state.selectedShapeType,
+                                    onColorClick = {
+                                        viewModel.onAction(DrawingAction.OnShowColorPicker)
+                                    },
+                                    onSelectShapeType = {
+                                        viewModel.onAction(DrawingAction.OnSelectShapeType(it))
+                                    },
+                                    onClose = {
+                                        viewModel.onAction(DrawingAction.OnCloseModeOptions)
+                                    }
+                                )
+                            }
+                            null -> {
+                                BottomNavigationBar(
+                                    onModeSelected = { mode ->
+                                        viewModel.onAction(DrawingAction.OnSelectMode(mode))
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }

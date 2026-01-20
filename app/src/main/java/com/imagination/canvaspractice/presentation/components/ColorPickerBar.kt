@@ -1,4 +1,4 @@
-package com.imagination.canvaspractice.presentation
+package com.imagination.canvaspractice.presentation.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,27 +21,30 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
+import com.imagination.canvaspractice.domain.constants.DrawingConstants
 
 /**
- * Color picker control for selecting drawing colors
+ * Reusable color picker bar component
+ * Displays all available colors in a horizontal scrollable row
  * 
- * @param modifier Modifier to be applied to the control
+ * @param modifier Modifier to be applied to the bar
  * @param selectedColor Currently selected color
  * @param colors List of available colors to choose from
  * @param onSelectColor Callback when a color is selected
  */
 @Composable
-fun CanvasControls(
+fun ColorPickerBar(
     modifier: Modifier = Modifier,
     selectedColor: Color,
-    colors: List<Color>,
+    colors: List<Color> = DrawingConstants.AVAILABLE_COLORS,
     onSelectColor: (Color) -> Unit
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
     ) {
         colors.fastForEach { color ->

@@ -1,0 +1,132 @@
+package com.imagination.canvaspractice.presentation.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBox
+import androidx.compose.material.icons.filled.AddCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import com.imagination.canvaspractice.domain.model.ShapeType
+
+/**
+ * Options bar for shape mode
+ * Shows shape type selector, color indicator, and close button
+ * 
+ * @param modifier Modifier to be applied to the bar
+ * @param selectedColor Currently selected color
+ * @param selectedShapeType Currently selected shape type
+ * @param onColorClick Callback when the color indicator is clicked
+ * @param onSelectShapeType Callback when a shape type is selected
+ * @param onClose Callback when the close button is clicked
+ */
+@Composable
+fun ShapeOptionsBar(
+    modifier: Modifier = Modifier,
+    selectedColor: Color,
+    selectedShapeType: ShapeType,
+    onColorClick: () -> Unit,
+    onSelectShapeType: (ShapeType) -> Unit,
+    onClose: () -> Unit
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onClose) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Close",
+                tint = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        
+        // Shape type selector
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ShapeTypeButton(
+                shapeType = ShapeType.RECTANGLE,
+                icon = Icons.Default.AccountBox,
+                isSelected = selectedShapeType == ShapeType.RECTANGLE,
+                onClick = { onSelectShapeType(ShapeType.RECTANGLE) }
+            )
+            ShapeTypeButton(
+                shapeType = ShapeType.CIRCLE,
+                icon = Icons.Default.AddCircle,
+                isSelected = selectedShapeType == ShapeType.CIRCLE,
+                onClick = { onSelectShapeType(ShapeType.CIRCLE) }
+            )
+            ShapeTypeButton(
+                shapeType = ShapeType.LINE,
+                icon = Icons.Default.MoreVert,
+                isSelected = selectedShapeType == ShapeType.LINE,
+                onClick = { onSelectShapeType(ShapeType.LINE) }
+            )
+            ShapeTypeButton(
+                shapeType = ShapeType.TRIANGLE,
+                icon = Icons.Default.PlayArrow,
+                isSelected = selectedShapeType == ShapeType.TRIANGLE,
+                onClick = { onSelectShapeType(ShapeType.TRIANGLE) }
+            )
+        }
+        
+        // Color indicator
+        ColorIndicator(
+            selectedColor = selectedColor,
+            onClick = onColorClick
+        )
+    }
+}
+
+@Composable
+private fun ShapeTypeButton(
+    shapeType: ShapeType,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(48.dp)
+            .then(
+                if (isSelected) {
+                    Modifier.background(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = androidx.compose.foundation.shape.CircleShape
+                    )
+                } else {
+                    Modifier
+                }
+            )
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = shapeType.name,
+            tint = if (isSelected) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            }
+        )
+    }
+}
