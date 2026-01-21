@@ -1,5 +1,6 @@
 package com.imagination.canvaspractice.presentation.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -7,11 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBox
-import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -19,7 +16,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.imagination.canvaspractice.R
 import com.imagination.canvaspractice.domain.model.ShapeType
 
 /**
@@ -45,8 +45,8 @@ fun ShapeOptionsBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(vertical = 8.dp),
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -65,25 +65,25 @@ fun ShapeOptionsBar(
         ) {
             ShapeTypeButton(
                 shapeType = ShapeType.RECTANGLE,
-                icon = Icons.Default.AccountBox,
+                iconRes = R.drawable.square_svgrepo_com,
                 isSelected = selectedShapeType == ShapeType.RECTANGLE,
                 onClick = { onSelectShapeType(ShapeType.RECTANGLE) }
             )
             ShapeTypeButton(
                 shapeType = ShapeType.CIRCLE,
-                icon = Icons.Default.AddCircle,
+                iconRes = R.drawable.circle_svgrepo_com,
                 isSelected = selectedShapeType == ShapeType.CIRCLE,
                 onClick = { onSelectShapeType(ShapeType.CIRCLE) }
             )
             ShapeTypeButton(
                 shapeType = ShapeType.LINE,
-                icon = Icons.Default.MoreVert,
+                iconRes = R.drawable.line_svgrepo_com,
                 isSelected = selectedShapeType == ShapeType.LINE,
                 onClick = { onSelectShapeType(ShapeType.LINE) }
             )
             ShapeTypeButton(
                 shapeType = ShapeType.TRIANGLE,
-                icon = Icons.Default.PlayArrow,
+                iconRes = R.drawable.triangle_svgrepo_com,
                 isSelected = selectedShapeType == ShapeType.TRIANGLE,
                 onClick = { onSelectShapeType(ShapeType.TRIANGLE) }
             )
@@ -100,14 +100,14 @@ fun ShapeOptionsBar(
 @Composable
 private fun ShapeTypeButton(
     shapeType: ShapeType,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconRes: Int,
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
     IconButton(
         onClick = onClick,
         modifier = Modifier
-            .size(48.dp)
+            .size(40.dp)
             .then(
                 if (isSelected) {
                     Modifier.background(
@@ -119,14 +119,17 @@ private fun ShapeTypeButton(
                 }
             )
     ) {
-        Icon(
-            imageVector = icon,
+        Image(
+            modifier = Modifier.size(24.dp),
+            painter = painterResource(iconRes),
             contentDescription = shapeType.name,
-            tint = if (isSelected) {
-                MaterialTheme.colorScheme.onPrimaryContainer
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            }
+            colorFilter = ColorFilter.tint(
+                if (isSelected) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+            )
         )
     }
 }

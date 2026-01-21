@@ -30,7 +30,7 @@ fun ColorIndicator(
 ) {
     Box(
         modifier = modifier
-            .size(40.dp)
+            .size(30.dp)
             .clip(CircleShape)
             .border(
                 width = 2.dp,
