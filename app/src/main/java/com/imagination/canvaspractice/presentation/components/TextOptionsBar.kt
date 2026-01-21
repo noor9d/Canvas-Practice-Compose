@@ -1,13 +1,13 @@
 package com.imagination.canvaspractice.presentation.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -17,7 +17,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.imagination.canvaspractice.R
 
 /**
  * Options bar for text mode
@@ -42,8 +45,8 @@ fun TextOptionsBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(vertical = 8.dp),
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -61,10 +64,11 @@ fun TextOptionsBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             IconButton(onClick = { onFontSizeChange((fontSize - 4f).coerceAtLeast(12f)) }) {
-                Icon(
-                    imageVector = Icons.Default.Clear,
+                Image(
+                    modifier = Modifier.size(24.dp),
+                    painter = painterResource(R.drawable.circle_minus_svgrepo_com),
                     contentDescription = "Decrease font size",
-                    tint = MaterialTheme.colorScheme.onSurface
+                    colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurface)
                 )
             }
             Text(
@@ -73,10 +77,11 @@ fun TextOptionsBar(
                 color = MaterialTheme.colorScheme.onSurface
             )
             IconButton(onClick = { onFontSizeChange((fontSize + 4f).coerceAtMost(72f)) }) {
-                Icon(
-                    imageVector = Icons.Default.Add,
+                Image(
+                    modifier = Modifier.size(24.dp),
+                    painter = painterResource(R.drawable.circle_plus_svgrepo_com),
                     contentDescription = "Increase font size",
-                    tint = MaterialTheme.colorScheme.onSurface
+                    colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurface)
                 )
             }
         }

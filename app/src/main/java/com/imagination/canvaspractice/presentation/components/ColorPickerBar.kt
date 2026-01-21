@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,9 +42,13 @@ fun ColorPickerBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
+            .padding(8.dp)
+            .background(
+                color = Color.Black.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(12.dp)
+            )
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
     ) {
         colors.fastForEach { color ->
@@ -56,11 +60,11 @@ fun ColorPickerBar(
                         scaleX = scale
                         scaleY = scale
                     }
-                    .size(34.dp)
+                    .size(30.dp)
                     .clip(CircleShape)
                     .background(color)
                     .border(
-                        width = if (isSelected) 2.dp else 1.dp,
+                        width = if (isSelected) 1.dp else 0.dp,
                         color = if (isSelected) {
                             Color.Black
                         } else {
