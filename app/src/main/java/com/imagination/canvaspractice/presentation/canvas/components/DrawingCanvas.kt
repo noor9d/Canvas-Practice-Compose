@@ -1,4 +1,4 @@
-package com.imagination.canvaspractice.presentation
+package com.imagination.canvaspractice.presentation.canvas.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -42,6 +43,8 @@ import com.imagination.canvaspractice.domain.model.PathData
 import com.imagination.canvaspractice.domain.model.ShapeData
 import com.imagination.canvaspractice.domain.model.ShapeType
 import com.imagination.canvaspractice.domain.model.TextData
+import com.imagination.canvaspractice.presentation.canvas.DrawingAction
+import kotlin.math.min
 
 /**
  * A composable canvas for drawing with touch gestures
@@ -273,7 +276,7 @@ private fun DrawScope.drawShape(shapeData: ShapeData) {
     val size = shapeData.size
     
     val style = if (shapeData.isFilled) {
-        androidx.compose.ui.graphics.drawscope.Fill
+        Fill
     } else {
         Stroke(
             width = shapeData.strokeWidth,
@@ -292,7 +295,7 @@ private fun DrawScope.drawShape(shapeData: ShapeData) {
             )
         }
         ShapeType.CIRCLE -> {
-            val radius = kotlin.math.min(size.width, size.height) / 2f
+            val radius = min(size.width, size.height) / 2f
             val center = Offset(
                 x = topLeft.x + size.width / 2f,
                 y = topLeft.y + size.height / 2f
