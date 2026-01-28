@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,8 +30,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.imagination.canvaspractice.core.components.GenericTopBar
 import com.imagination.canvaspractice.presentation.dashboard.components.AddNewBoardItem
+import com.imagination.canvaspractice.presentation.dashboard.components.BoardItem
 import com.imagination.canvaspractice.presentation.navigation.BackStack
 import com.imagination.canvaspractice.presentation.navigation.push
+import com.imagination.canvaspractice.presentation.sheets.BoardOption
+import com.imagination.canvaspractice.presentation.sheets.BoardOptionsBottomSheet
 import com.imagination.canvaspractice.ui.theme.CanvasPracticeTheme
 import com.synapses.presentation.dashboard.model.Board
 
@@ -99,17 +103,8 @@ fun DashboardScreen(
                 )
             }
 
-            item {
-                AddNewBoardItem(
-                    title = "New Note",
-                    onClick = {
-                        viewModel.registerUserEvent(UserEvent.AddNewNote)
-                    }
-                )
-            }
-
             // Board items
-            /*itemsIndexed(boards) { _, board ->
+            itemsIndexed(boards) { _, board ->
                 BoardItem(
                     board = board,
                     onClick = {
@@ -122,7 +117,7 @@ fun DashboardScreen(
                         viewModel.registerUserEvent(UserEvent.ShowSheet(DashboardSheet.BOARD_OPTION_SHEET))
                     }
                 )
-            }*/
+            }
         }
     }
 
@@ -145,7 +140,7 @@ fun DashboardScreen(
                 }
 
                 DashboardSheet.BOARD_OPTION_SHEET -> {
-                    /*if (selectedBoard != null) {
+                    if (selectedBoard != null) {
                         BoardOptionsBottomSheet(
                             onDismiss = { viewModel.registerUserEvent(UserEvent.HideSheet) },
                             onOptionSelected = { option ->
@@ -170,7 +165,7 @@ fun DashboardScreen(
                                 }
                             }
                         )
-                    }*/
+                    }
                 }
 
                 else -> {}

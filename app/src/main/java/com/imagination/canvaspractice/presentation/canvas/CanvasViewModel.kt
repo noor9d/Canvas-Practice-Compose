@@ -10,6 +10,8 @@ import com.imagination.canvaspractice.domain.model.PathData
 import com.imagination.canvaspractice.domain.model.ShapeData
 import com.imagination.canvaspractice.domain.model.ShapeType
 import com.imagination.canvaspractice.domain.model.TextData
+import com.imagination.canvaspractice.data.mapper.BoardMapper.toDomain
+import com.imagination.canvaspractice.domain.repository.BoardRepository
 import com.imagination.canvaspractice.presentation.canvas.components.BoardState
 import com.imagination.canvaspractice.presentation.navigation.Screen
 import com.synapses.presentation.dashboard.model.Board
@@ -18,11 +20,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import androidx.lifecycle.viewModelScope
 import javax.inject.Inject
 import kotlin.collections.plus
 
 @HiltViewModel
-class CanvasViewModel @Inject constructor() : BaseViewModel<UserEvent, UiEvent>() {
+class CanvasViewModel @Inject constructor(
+    private val boardRepository: BoardRepository
+) : BaseViewModel<UserEvent, UiEvent>() {
+
+    private var currentBoardId: Long? = null
 
     private val _boardState = MutableStateFlow<BoardState>(BoardState.Loading)
     val boardState: StateFlow<BoardState> = _boardState.asStateFlow()
@@ -115,11 +123,18 @@ class CanvasViewModel @Inject constructor() : BaseViewModel<UserEvent, UiEvent>(
 
     private fun onShapeEnd() {
         val currentShape = _state.value.currentShape ?: return
+        val boardId = currentBoardId ?: return
+        
         _state.update {
             it.copy(
                 currentShape = null,
                 shapeElements = it.shapeElements + currentShape
             )
+        }
+        
+        // Save to database
+        viewModelScope.launch {
+            boardRepository.insertShape(currentShape, boardId)
         }
     }
 
@@ -140,18 +155,27 @@ class CanvasViewModel @Inject constructor() : BaseViewModel<UserEvent, UiEvent>(
     private fun onTextInputDone() {
         val position = _state.value.textInputPosition ?: return
         val textToAdd = _state.value.currentTextInput.ifBlank { "Text" }
+        val boardId = currentBoardId ?: return
+        
+        val newText = TextData(
+            id = System.currentTimeMillis().toString(),
+            text = textToAdd,
+            position = position,
+            color = _state.value.selectedColor,
+            fontSize = _state.value.selectedFontSize
+        )
+        
         _state.update {
             it.copy(
                 textInputPosition = null,
                 currentTextInput = "",
-                textElements = it.textElements + TextData(
-                    id = System.currentTimeMillis().toString(),
-                    text = textToAdd,
-                    position = position,
-                    color = it.selectedColor,
-                    fontSize = it.selectedFontSize
-                )
+                textElements = it.textElements + newText
             )
+        }
+        
+        // Save to database
+        viewModelScope.launch {
+            boardRepository.insertText(newText, boardId)
         }
     }
 
@@ -174,11 +198,18 @@ class CanvasViewModel @Inject constructor() : BaseViewModel<UserEvent, UiEvent>(
 
     private fun onPathEnd() {
         val currentPathData = _state.value.currentPath ?: return
+        val boardId = currentBoardId ?: return
+        
         _state.update {
             it.copy(
                 currentPath = null,
                 paths = it.paths + currentPathData
             )
+        }
+        
+        // Save to database
+        viewModelScope.launch {
+            boardRepository.insertPath(currentPathData, boardId)
         }
     }
 
@@ -209,6 +240,8 @@ class CanvasViewModel @Inject constructor() : BaseViewModel<UserEvent, UiEvent>(
     }
 
     private fun onClearCanvasClicked() {
+        val boardId = currentBoardId ?: return
+        
         _state.update {
             it.copy(
                 currentPath = null,
@@ -218,16 +251,41 @@ class CanvasViewModel @Inject constructor() : BaseViewModel<UserEvent, UiEvent>(
                 currentShape = null
             )
         }
+        
+        // Clear from database
+        viewModelScope.launch {
+            boardRepository.deletePathsByBoardId(boardId)
+            boardRepository.deleteTextsByBoardId(boardId)
+            boardRepository.deleteShapesByBoardId(boardId)
+        }
     }
 
     fun loadBoard(boardId: Int) = launchWithExceptionHandler {
         _boardState.value = BoardState.Loading
         try {
-            val currentBoard = Board(
-                id = boardId,
-                title = "Board $boardId"
-            )
-            _boardState.value = BoardState.Content(board = currentBoard)
+            val boardIdLong = boardId.toLong()
+            currentBoardId = boardIdLong
+            
+            // Load board entity
+            val boardEntity = boardRepository.getBoardById(boardIdLong)
+            if (boardEntity == null) {
+                _boardState.value = BoardState.Error("Board not found")
+                return@launchWithExceptionHandler
+            }
+            
+            val board = boardEntity.toDomain()
+            _boardState.value = BoardState.Content(board = board)
+            
+            // Load all drawing elements
+            val (paths, texts, shapes) = boardRepository.loadBoardData(boardIdLong)
+            
+            _state.update {
+                it.copy(
+                    paths = paths,
+                    textElements = texts,
+                    shapeElements = shapes
+                )
+            }
 
         } catch (e: Exception) {
             _boardState.value = BoardState.Error(e.message ?: "Failed to load board")

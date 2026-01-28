@@ -3,6 +3,9 @@ package com.imagination.canvaspractice.presentation.dashboard
 import android.app.Activity
 import androidx.lifecycle.viewModelScope
 import com.imagination.canvaspractice.core.base.BaseViewModel
+import com.imagination.canvaspractice.data.local.database.entity.BoardEntity
+import com.imagination.canvaspractice.data.mapper.BoardMapper.toDomain
+import com.imagination.canvaspractice.domain.repository.BoardRepository
 import com.imagination.canvaspractice.presentation.navigation.Screen
 import com.synapses.presentation.dashboard.model.Board
 import com.synapses.presentation.dashboard.model.Note
@@ -15,7 +18,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
-
+    private val boardRepository: BoardRepository
 ): BaseViewModel<UserEvent, UiEvent>() {
 
     private val _boards = MutableStateFlow<List<Board>>(emptyList())
@@ -28,7 +31,7 @@ class DashboardViewModel @Inject constructor(
     val activeSheet = _activeSheet.asStateFlow()
 
     init {
-        loadDummyBoards()
+        loadBoards()
     }
 
     override fun onUserEvent(event: UserEvent) {
@@ -48,23 +51,25 @@ class DashboardViewModel @Inject constructor(
         activity.finish()
     }
 
-    private fun loadDummyBoards() {
+    private fun loadBoards() {
         viewModelScope.launch {
-            _boards.value = listOf(
-                Board(id = 1, title = "Project Planning"),
-                Board(id = 2, title = "Design Ideas"),
-                Board(id = 3, title = "Meeting Notes")
-            )
+            boardRepository.getAllBoards().collect { boardEntities ->
+                _boards.value = boardEntities.toDomain()
+            }
         }
     }
 
     private fun addNewBoard() {
         viewModelScope.launch {
-            val newId = (_boards.value.maxOfOrNull { it.id } ?: 0) + 1
-            val newBoard = Board(id = newId, title = "New Board $newId")
-            _boards.value += newBoard
+            val newBoardEntity = BoardEntity(
+                id = 0, // Auto-generate
+                title = "New Board",
+                createdAt = System.currentTimeMillis(),
+                updatedAt = System.currentTimeMillis()
+            )
+            val boardId = boardRepository.insertBoard(newBoardEntity)
             // Navigate to the newly created board
-            submitUIEvent(UiEvent.Navigate(Screen.Canvas(boardId = newId)))
+            submitUIEvent(UiEvent.Navigate(Screen.Canvas(boardId = boardId.toInt())))
         }
     }
 
@@ -86,7 +91,7 @@ class DashboardViewModel @Inject constructor(
 
     private fun deleteBoard(boardId: Int) {
         viewModelScope.launch {
-            _boards.value = _boards.value.filter { it.id != boardId }
+            boardRepository.deleteBoard(boardId.toLong())
         }
     }
 }
