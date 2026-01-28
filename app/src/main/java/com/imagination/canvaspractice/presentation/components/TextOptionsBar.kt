@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.imagination.canvaspractice.R
+import com.imagination.canvaspractice.ui.theme.CanvasPracticeTheme
 
 /**
  * Options bar for text mode
@@ -45,7 +46,7 @@ fun TextOptionsBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+            .background(CanvasPracticeTheme.colorScheme.background)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -54,7 +55,7 @@ fun TextOptionsBar(
             Icon(
                 imageVector = Icons.Default.Close,
                 contentDescription = "Close",
-                tint = MaterialTheme.colorScheme.onSurface
+                tint = CanvasPracticeTheme.colorScheme.onBackground
             )
         }
         
@@ -68,20 +69,20 @@ fun TextOptionsBar(
                     modifier = Modifier.size(24.dp),
                     painter = painterResource(R.drawable.circle_minus_svgrepo_com),
                     contentDescription = "Decrease font size",
-                    colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurface)
+                    colorFilter = ColorFilter.tint(CanvasPracticeTheme.colorScheme.onBackground)
                 )
             }
             Text(
                 text = "${fontSize.toInt()}sp",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                style = CanvasPracticeTheme.typography.labelNav,
+                color = CanvasPracticeTheme.colorScheme.onBackground
             )
             IconButton(onClick = { onFontSizeChange((fontSize + 4f).coerceAtMost(72f)) }) {
                 Image(
                     modifier = Modifier.size(24.dp),
                     painter = painterResource(R.drawable.circle_plus_svgrepo_com),
                     contentDescription = "Increase font size",
-                    colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurface)
+                    colorFilter = ColorFilter.tint(CanvasPracticeTheme.colorScheme.onBackground)
                 )
             }
         }

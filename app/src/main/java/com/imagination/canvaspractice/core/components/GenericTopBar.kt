@@ -1,4 +1,4 @@
-package com.imagination.canvaspractice.presentation.components
+package com.imagination.canvaspractice.core.components
 
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material.icons.Icons
@@ -20,7 +20,7 @@ import com.imagination.canvaspractice.ui.theme.CanvasPracticeTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CanvasTopAppBar(
+fun GenericTopBar(
     modifier: Modifier = Modifier,
     isDarkMode: Boolean = false,
     title: String = "",
@@ -70,6 +70,6 @@ fun CanvasTopAppBar(
 @Composable
 private fun TopAppBarPreview() {
     CanvasPracticeTheme {
-        CanvasTopAppBar(title = "Canvas Practice")
+        GenericTopBar(title = "Dashboard")
     }
 }

@@ -34,7 +34,7 @@ fun ColorIndicator(
             .clip(CircleShape)
             .border(
                 width = 2.dp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
                 shape = CircleShape
             )
             .clickable(onClick = onClick)
