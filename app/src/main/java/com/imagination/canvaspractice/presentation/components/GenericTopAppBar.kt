@@ -20,7 +20,7 @@ import com.imagination.canvaspractice.ui.theme.CanvasPracticeTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CanvasTopAppBar(
+fun GenericTopAppBar(
     modifier: Modifier = Modifier,
     isDarkMode: Boolean = false,
     title: String = "",
@@ -70,6 +70,6 @@ fun CanvasTopAppBar(
 @Composable
 private fun TopAppBarPreview() {
     CanvasPracticeTheme {
-        CanvasTopAppBar(title = "Canvas Practice")
+        GenericTopAppBar(title = "Canvas Practice")
     }
 }

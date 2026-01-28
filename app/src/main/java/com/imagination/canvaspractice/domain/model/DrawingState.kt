@@ -3,10 +3,14 @@ package com.imagination.canvaspractice.domain.model
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import com.imagination.canvaspractice.domain.constants.DrawingConstants
+import com.imagination.canvaspractice.presentation.dashboard.model.Board
 
 /**
- * Represents the current state of the drawing canvas
+ * Represents the complete state of the canvas screen, including board loading and drawing state
  * 
+ * @param isLoading Whether the board is currently loading
+ * @param errorMessage Error message if loading failed (null if no error)
+ * @param board The loaded board information (null if not loaded or error)
  * @param drawingMode The currently active drawing mode (null when showing main navigation bar)
  * @param selectedColor The currently selected color for drawing
  * @param isColorPickerVisible Whether the color picker bar is currently visible
@@ -19,6 +23,12 @@ import com.imagination.canvaspractice.domain.constants.DrawingConstants
  * @param selectedFontSize The selected font size (when in TEXT mode)
  */
 data class DrawingState(
+    // Board loading state
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+    val board: Board? = null,
+    
+    // Drawing state
     val drawingMode: DrawingMode? = null,
     val selectedColor: Color = DrawingConstants.DEFAULT_COLOR,
     val isColorPickerVisible: Boolean = false,

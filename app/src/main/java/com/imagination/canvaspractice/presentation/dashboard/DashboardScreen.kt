@@ -35,8 +35,9 @@ import com.imagination.canvaspractice.presentation.navigation.BackStack
 import com.imagination.canvaspractice.presentation.navigation.push
 import com.imagination.canvaspractice.presentation.sheets.BoardOption
 import com.imagination.canvaspractice.presentation.sheets.BoardOptionsBottomSheet
+import com.imagination.canvaspractice.presentation.sheets.ExitBottomSheet
 import com.imagination.canvaspractice.ui.theme.CanvasPracticeTheme
-import com.synapses.presentation.dashboard.model.Board
+import com.imagination.canvaspractice.presentation.dashboard.model.Board
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -129,14 +130,14 @@ fun DashboardScreen(
         ) {
             when (activeSheet) {
                 DashboardSheet.EXIT_SHEET -> {
-                    /*ExitBottomSheet(
+                    ExitBottomSheet(
                         onExitClicked = {
                             activity?.let {
                                 viewModel.registerUserEvent(UserEvent.FinishActivity(it))
                             }
                         },
                         onDismiss = { viewModel.registerUserEvent(UserEvent.HideSheet) }
-                    )*/
+                    )
                 }
 
                 DashboardSheet.BOARD_OPTION_SHEET -> {

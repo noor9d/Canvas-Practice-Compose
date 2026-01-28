@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -19,6 +18,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.imagination.canvaspractice.R
 import com.imagination.canvaspractice.domain.model.DrawingMode
+import com.imagination.canvaspractice.ui.theme.CanvasPracticeTheme
 
 /**
  * Bottom navigation bar showing all available drawing mode options
@@ -34,7 +34,7 @@ fun BottomNavigationBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+            .background(CanvasPracticeTheme.colorScheme.background)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
@@ -72,12 +72,12 @@ private fun DrawingModeButton(
             modifier = Modifier.size(24.dp),
             painter = painterResource(iconRes),
             contentDescription = label,
-            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurface)
+            colorFilter = ColorFilter.tint(CanvasPracticeTheme.colorScheme.onBackground)
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface
+            style = CanvasPracticeTheme.typography.text,
+            color = CanvasPracticeTheme.colorScheme.onBackground
         )
     }
 }

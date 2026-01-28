@@ -2,7 +2,9 @@ package com.imagination.canvaspractice.presentation.canvas
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.viewModelScope
 import com.imagination.canvaspractice.core.base.BaseViewModel
+import com.imagination.canvaspractice.data.mapper.BoardMapper.toDomain
 import com.imagination.canvaspractice.domain.constants.DrawingConstants
 import com.imagination.canvaspractice.domain.model.DrawingMode
 import com.imagination.canvaspractice.domain.model.DrawingState
@@ -10,20 +12,14 @@ import com.imagination.canvaspractice.domain.model.PathData
 import com.imagination.canvaspractice.domain.model.ShapeData
 import com.imagination.canvaspractice.domain.model.ShapeType
 import com.imagination.canvaspractice.domain.model.TextData
-import com.imagination.canvaspractice.data.mapper.BoardMapper.toDomain
 import com.imagination.canvaspractice.domain.repository.BoardRepository
-import com.imagination.canvaspractice.presentation.canvas.components.BoardState
 import com.imagination.canvaspractice.presentation.navigation.Screen
-import com.synapses.presentation.dashboard.model.Board
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import androidx.lifecycle.viewModelScope
 import javax.inject.Inject
-import kotlin.collections.plus
 
 @HiltViewModel
 class CanvasViewModel @Inject constructor(
@@ -32,11 +28,11 @@ class CanvasViewModel @Inject constructor(
 
     private var currentBoardId: Long? = null
 
-    private val _boardState = MutableStateFlow<BoardState>(BoardState.Loading)
-    val boardState: StateFlow<BoardState> = _boardState.asStateFlow()
-
     private val _state = MutableStateFlow(
         DrawingState(
+            isLoading = false,
+            errorMessage = null,
+            board = null,
             drawingMode = null, // Start with navigation bar visible
             selectedColor = DrawingConstants.DEFAULT_COLOR
         )
@@ -73,7 +69,8 @@ class CanvasViewModel @Inject constructor(
             it.copy(
                 drawingMode = mode,
                 textInputPosition = null,
-                currentTextInput = ""
+                currentTextInput = "",
+                isColorPickerVisible = false // Hide color picker when switching modes
             )
         }
     }
@@ -83,7 +80,8 @@ class CanvasViewModel @Inject constructor(
             it.copy(
                 drawingMode = null,
                 textInputPosition = null,
-                currentTextInput = ""
+                currentTextInput = "",
+                isColorPickerVisible = false // Hide color picker when closing tool options
             )
         }
     }
@@ -261,7 +259,7 @@ class CanvasViewModel @Inject constructor(
     }
 
     fun loadBoard(boardId: Int) = launchWithExceptionHandler {
-        _boardState.value = BoardState.Loading
+        _state.update { it.copy(isLoading = true, errorMessage = null) }
         try {
             val boardIdLong = boardId.toLong()
             currentBoardId = boardIdLong
@@ -269,18 +267,25 @@ class CanvasViewModel @Inject constructor(
             // Load board entity
             val boardEntity = boardRepository.getBoardById(boardIdLong)
             if (boardEntity == null) {
-                _boardState.value = BoardState.Error("Board not found")
+                _state.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = "Board not found"
+                    )
+                }
                 return@launchWithExceptionHandler
             }
             
             val board = boardEntity.toDomain()
-            _boardState.value = BoardState.Content(board = board)
             
             // Load all drawing elements
             val (paths, texts, shapes) = boardRepository.loadBoardData(boardIdLong)
             
             _state.update {
                 it.copy(
+                    isLoading = false,
+                    errorMessage = null,
+                    board = board,
                     paths = paths,
                     textElements = texts,
                     shapeElements = shapes
@@ -288,7 +293,12 @@ class CanvasViewModel @Inject constructor(
             }
 
         } catch (e: Exception) {
-            _boardState.value = BoardState.Error(e.message ?: "Failed to load board")
+            _state.update {
+                it.copy(
+                    isLoading = false,
+                    errorMessage = e.message ?: "Failed to load board"
+                )
+            }
         }
     }
 

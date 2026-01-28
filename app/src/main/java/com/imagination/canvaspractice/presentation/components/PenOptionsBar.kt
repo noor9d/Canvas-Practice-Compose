@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.imagination.canvaspractice.ui.theme.CanvasPracticeTheme
 
 /**
  * Options bar for pen drawing mode
@@ -34,7 +35,7 @@ fun PenOptionsBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+            .background(CanvasPracticeTheme.colorScheme.background)
             .padding(vertical = 8.dp, horizontal = 16.dp),
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -43,7 +44,7 @@ fun PenOptionsBar(
             Icon(
                 imageVector = Icons.Default.Close,
                 contentDescription = "Close",
-                tint = MaterialTheme.colorScheme.onSurface
+                tint = CanvasPracticeTheme.colorScheme.onBackground
             )
         }
         ColorIndicator(

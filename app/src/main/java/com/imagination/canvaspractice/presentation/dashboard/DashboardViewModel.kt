@@ -7,8 +7,8 @@ import com.imagination.canvaspractice.data.local.database.entity.BoardEntity
 import com.imagination.canvaspractice.data.mapper.BoardMapper.toDomain
 import com.imagination.canvaspractice.domain.repository.BoardRepository
 import com.imagination.canvaspractice.presentation.navigation.Screen
-import com.synapses.presentation.dashboard.model.Board
-import com.synapses.presentation.dashboard.model.Note
+import com.imagination.canvaspractice.presentation.dashboard.model.Board
+import com.imagination.canvaspractice.presentation.dashboard.model.Note
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -63,7 +63,7 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             val newBoardEntity = BoardEntity(
                 id = 0, // Auto-generate
-                title = "New Board",
+                title = "Untitled",
                 createdAt = System.currentTimeMillis(),
                 updatedAt = System.currentTimeMillis()
             )

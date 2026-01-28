@@ -7,11 +7,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,6 +21,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.imagination.canvaspractice.R
 import com.imagination.canvaspractice.domain.model.ShapeType
+import com.imagination.canvaspractice.ui.theme.CanvasPracticeTheme
 
 /**
  * Options bar for shape mode
@@ -45,7 +46,7 @@ fun ShapeOptionsBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+            .background(CanvasPracticeTheme.colorScheme.background)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -54,7 +55,7 @@ fun ShapeOptionsBar(
             Icon(
                 imageVector = Icons.Default.Close,
                 contentDescription = "Close",
-                tint = MaterialTheme.colorScheme.onSurface
+                tint = CanvasPracticeTheme.colorScheme.onBackground
             )
         }
         
@@ -111,8 +112,8 @@ private fun ShapeTypeButton(
             .then(
                 if (isSelected) {
                     Modifier.background(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = androidx.compose.foundation.shape.CircleShape
+                        color = CanvasPracticeTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        shape = CircleShape
                     )
                 } else {
                     Modifier
@@ -125,9 +126,9 @@ private fun ShapeTypeButton(
             contentDescription = shapeType.name,
             colorFilter = ColorFilter.tint(
                 if (isSelected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
+                    CanvasPracticeTheme.colorScheme.onBackground
                 } else {
-                    MaterialTheme.colorScheme.onSurface
+                    CanvasPracticeTheme.colorScheme.onBackground
                 }
             )
         )

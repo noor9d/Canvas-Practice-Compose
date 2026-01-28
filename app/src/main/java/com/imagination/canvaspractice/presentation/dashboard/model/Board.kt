@@ -1,4 +1,4 @@
-package com.synapses.presentation.dashboard.model
+package com.imagination.canvaspractice.presentation.dashboard.model
 
 /**
  * Represents a Board in the dashboard.

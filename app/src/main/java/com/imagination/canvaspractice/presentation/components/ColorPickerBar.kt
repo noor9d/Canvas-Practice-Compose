@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
 import com.imagination.canvaspractice.domain.constants.DrawingConstants
+import com.imagination.canvaspractice.ui.theme.CanvasPracticeTheme
 
 /**
  * Reusable color picker bar component
@@ -44,7 +45,7 @@ fun ColorPickerBar(
             .fillMaxWidth()
             .padding(8.dp)
             .background(
-                color = Color.Black.copy(alpha = 0.5f),
+                color = CanvasPracticeTheme.colorScheme.background,
                 shape = RoundedCornerShape(12.dp)
             )
             .horizontalScroll(rememberScrollState())

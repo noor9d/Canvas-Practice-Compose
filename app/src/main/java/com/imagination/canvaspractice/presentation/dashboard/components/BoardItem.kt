@@ -26,7 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.imagination.canvaspractice.ui.theme.CanvasPracticeTheme
-import com.synapses.presentation.dashboard.model.Board
+import com.imagination.canvaspractice.presentation.dashboard.model.Board
 
 /**
  * Composable for displaying a Board item in the grid.

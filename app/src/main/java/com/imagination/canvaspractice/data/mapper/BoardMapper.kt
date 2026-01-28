@@ -1,7 +1,7 @@
 package com.imagination.canvaspractice.data.mapper
 
 import com.imagination.canvaspractice.data.local.database.entity.BoardEntity
-import com.synapses.presentation.dashboard.model.Board
+import com.imagination.canvaspractice.presentation.dashboard.model.Board
 
 /**
  * Mapper to convert between BoardEntity (Room) and Board (Domain/Presentation)
