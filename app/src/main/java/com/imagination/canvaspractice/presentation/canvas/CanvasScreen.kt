@@ -95,6 +95,8 @@ fun CanvasScreen(
                         textInput = state.currentTextInput,
                         selectedColor = state.selectedColor,
                         selectedFontSize = state.selectedFontSize,
+                        initialScale = state.scale,
+                        initialPanOffset = state.panOffset,
                         onTextInputChange = {
                             viewModel.onAction(DrawingAction.OnTextInputChange(it))
                         },

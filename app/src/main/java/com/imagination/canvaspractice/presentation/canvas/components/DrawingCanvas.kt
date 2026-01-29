@@ -54,21 +54,29 @@ import com.imagination.canvaspractice.domain.constants.DrawingConstants.GRID_COL
 import com.imagination.canvaspractice.domain.constants.DrawingConstants.GRID_SIZE
 import com.imagination.canvaspractice.domain.constants.DrawingConstants.MAX_SCALE
 import com.imagination.canvaspractice.domain.constants.DrawingConstants.MIN_SCALE
+import com.imagination.canvaspractice.domain.model.CanvasItem
+import com.imagination.canvaspractice.domain.model.CanvasItemFactory
 import com.imagination.canvaspractice.domain.model.DrawingMode
 import com.imagination.canvaspractice.domain.model.PathData
+import com.imagination.canvaspractice.domain.model.PathCanvasItem
+import com.imagination.canvaspractice.domain.model.ShapeCanvasItem
 import com.imagination.canvaspractice.domain.model.ShapeData
 import com.imagination.canvaspractice.domain.model.ShapeType
+import com.imagination.canvaspractice.domain.model.TextCanvasItem
 import com.imagination.canvaspractice.domain.model.TextData
 import com.imagination.canvaspractice.presentation.canvas.DrawingAction
 import com.imagination.canvaspractice.ui.theme.CanvasPracticeTheme
+import java.lang.Math.pow
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.min
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 /**
  * A composable canvas for drawing with touch gestures
  * Supports multiple drawing modes: Pen, Text, and Shapes
- * 
+ *
  * @param modifier Modifier to be applied to the canvas
  * @param paths List of completed paths to render
  * @param currentPath The path currently being drawn (if any)
@@ -95,6 +103,8 @@ fun DrawingCanvas(
     textInput: String,
     selectedColor: Color,
     selectedFontSize: Float,
+    initialScale: Float = 1f,
+    initialPanOffset: Offset = Offset.Zero,
     onTextInputChange: (String) -> Unit,
     onTextInputDone: () -> Unit,
     onAction: (DrawingAction) -> Unit
@@ -103,10 +113,25 @@ fun DrawingCanvas(
     val density = LocalDensity.current
     val focusRequester = remember { FocusRequester() }
 
-    // Zoom/Pan state (local for smooth performance)
-    var scale by remember { mutableFloatStateOf(0.5f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
+    // Zoom/Pan state (local for smooth performance, initialized from state)
+    var scale by remember(initialScale) { mutableFloatStateOf(initialScale) }
+    var offset by remember(initialPanOffset) { mutableStateOf(initialPanOffset) }
     var isZooming by remember { mutableStateOf(false) }
+
+    // Sync with initial values when they change (e.g., when board loads)
+    LaunchedEffect(initialScale, initialPanOffset) {
+        // Only update if there's a significant difference to avoid conflicts during gestures
+        val scaleDiff = kotlin.math.abs(scale - initialScale)
+        val panDiff = kotlin.math.sqrt(
+            (offset.x - initialPanOffset.x).toDouble().pow(2.0) +
+                    (offset.y - initialPanOffset.y).toDouble().pow(2.0)
+        ).toFloat()
+
+        if (scaleDiff > 0.001f || panDiff > 1f) {
+            scale = initialScale
+            offset = initialPanOffset
+        }
+    }
 
     // Auto-focus when text input position is set
     LaunchedEffect(textInputPosition) {
@@ -150,14 +175,15 @@ fun DrawingCanvas(
 
     fun drawGrid(drawScope: DrawScope) {
         val viewportTopLeft = screenToCanvas(Offset.Zero)
-        val viewportBottomRight = screenToCanvas(Offset(drawScope.size.width, drawScope.size.height))
+        val viewportBottomRight =
+            screenToCanvas(Offset(drawScope.size.width, drawScope.size.height))
         val viewport = Rect(viewportTopLeft, viewportBottomRight)
-        
+
         val startX = floor(viewport.left / GRID_SIZE) * GRID_SIZE
         val endX = ceil(viewport.right / GRID_SIZE) * GRID_SIZE
         val startY = floor(viewport.top / GRID_SIZE) * GRID_SIZE
         val endY = ceil(viewport.bottom / GRID_SIZE) * GRID_SIZE
-        
+
         // Draw vertical lines
         var x = startX
         while (x <= endX) {
@@ -195,7 +221,7 @@ fun DrawingCanvas(
                             detectDragGestures(
                                 onDragStart = { screenOffset ->
                                     val canvasOffset = (screenOffset - offset) / scale
-                                    onAction(DrawingAction.OnNewPathStart)
+                                    onAction(DrawingAction.OnNewPathStart(scale))
                                     onAction(DrawingAction.OnDraw(canvasOffset))
                                 },
                                 onDragEnd = {
@@ -215,7 +241,7 @@ fun DrawingCanvas(
                             detectDragGestures(
                                 onDragStart = { screenOffset ->
                                     val canvasOffset = (screenOffset - offset) / scale
-                                    onAction(DrawingAction.OnShapeStart(canvasOffset))
+                                    onAction(DrawingAction.OnShapeStart(canvasOffset, scale))
                                 },
                                 onDragEnd = {
                                     onAction(DrawingAction.OnShapeEnd)
@@ -233,7 +259,7 @@ fun DrawingCanvas(
                         DrawingMode.TEXT -> {
                             detectTapGestures { screenOffset ->
                                 val canvasOffset = (screenOffset - offset) / scale
-                                onAction(DrawingAction.OnTextInputStart(canvasOffset))
+                                onAction(DrawingAction.OnTextInputStart(canvasOffset, scale))
                             }
                         }
 
@@ -242,27 +268,33 @@ fun DrawingCanvas(
                         }
                     }
                 }
-                .pointerInput(Unit) {
-                    // Handle zoom/pan gestures (separate from drawing gestures)
-                    detectTransformGestures { centroid, pan, zoom, _ ->
-                        val (newOffset, newScale) = zoomingItemOrCanvas(
-                            pan = pan,
-                            scale = scale,
-                            zoom = zoom,
-                            minScale = MIN_SCALE,
-                            maxScale = MAX_SCALE,
-                            centroid = centroid,
-                            offset = offset
-                        )
-                        
-                        // Only show percentage when actually zooming (zoom factor != 1.0)
-                        // This distinguishes zoom from pan gestures
-                        if (kotlin.math.abs(zoom - 1.0f) > 0.01f) {
-                            isZooming = true
+                .pointerInput(drawingMode) {
+                    // Handle zoom/pan gestures ONLY when no drawing mode is active
+                    // This prevents conflicts between drawing and panning gestures
+                    if (drawingMode == null) {
+                        detectTransformGestures { centroid, pan, zoom, _ ->
+                            val (newOffset, newScale) = zoomingItemOrCanvas(
+                                pan = pan,
+                                scale = scale,
+                                zoom = zoom,
+                                minScale = MIN_SCALE,
+                                maxScale = MAX_SCALE,
+                                centroid = centroid,
+                                offset = offset
+                            )
+
+                            // Only show percentage when actually zooming (zoom factor != 1.0)
+                            // This distinguishes zoom from pan gestures
+                            if (kotlin.math.abs(zoom - 1.0f) > 0.01f) {
+                                isZooming = true
+                            }
+
+                            scale = newScale
+                            offset = newOffset
+
+                            // Save zoom/pan to database
+                            onAction(DrawingAction.OnZoomPanChange(newScale, newOffset))
                         }
-                        
-                        scale = newScale
-                        offset = newOffset
                     }
                 }
                 .graphicsLayer(
@@ -273,52 +305,39 @@ fun DrawingCanvas(
                     transformOrigin = TransformOrigin(0f, 0f)
                 )
         ) {
+            // Create canvas items from domain models (outside Canvas lambda)
+            val canvasItems = remember(paths, shapeElements, textElements) {
+                CanvasItemFactory.createItems(paths, shapeElements, textElements)
+            }
+
             Canvas(
                 modifier = Modifier.fillMaxSize()
             ) {
+                // Draw grid
                 drawGrid(this)
 
-                // Draw all completed paths
-                paths.fastForEach { pathData ->
-                    drawPath(
-                        path = pathData.path,
-                        color = pathData.color,
-                        strokeWidth = pathData.strokeWidth
-                    )
+                // Calculate viewport for visibility checking (in canvas coordinates)
+                val viewportTopLeft = screenToCanvas(Offset.Zero)
+                val viewportBottomRight = screenToCanvas(Offset(size.width, size.height))
+                val viewport = Rect(viewportTopLeft, viewportBottomRight)
+
+                // Draw all items
+                canvasItems.forEach { item ->
+                    if (item.isVisible(viewport)) {
+                        item.draw(this, textMeasurer)
+                    }
                 }
 
-                // Draw the current path being drawn
-                currentPath?.let {
-                    drawPath(
-                        path = it.path,
-                        color = it.color,
-                        strokeWidth = it.strokeWidth
-                    )
+                // Draw current path being drawn (if any)
+                currentPath?.let { pathData ->
+                    val pathItem = PathCanvasItem(pathData)
+                    pathItem.draw(this, textMeasurer)
                 }
 
-                // Draw all completed shapes
-                shapeElements.fastForEach { shapeData ->
-                    drawShape(shapeData)
-                }
-
-                // Draw the current shape being drawn
-                currentShape?.let {
-                    drawShape(it)
-                }
-
-                // Draw all text elements
-                textElements.fastForEach { textData ->
-                    val textLayoutResult = textMeasurer.measure(
-                        text = textData.text,
-                        style = TextStyle(
-                            color = textData.color,
-                            fontSize = textData.fontSize.sp
-                        )
-                    )
-                    drawText(
-                        textLayoutResult = textLayoutResult,
-                        topLeft = textData.position
-                    )
+                // Draw current shape being drawn (if any)
+                currentShape?.let { shapeData ->
+                    val shapeItem = ShapeCanvasItem(shapeData)
+                    shapeItem.draw(this, textMeasurer)
                 }
             }
         }
@@ -328,7 +347,7 @@ fun DrawingCanvas(
             // Map scale from [MIN_SCALE, MAX_SCALE] to [1%, 400%]
             val percentage = ((scale - MIN_SCALE) / (MAX_SCALE - MIN_SCALE)) * 399f + 1f
             val clampedPercentage = percentage.coerceIn(1f, 400f)
-            
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -386,125 +405,6 @@ fun DrawingCanvas(
                     focusedTextColor = selectedColor,
                     unfocusedTextColor = selectedColor
                 )
-            )
-        }
-    }
-}
-
-/**
- * Draws a smoothed path from a list of offsets.
- * Uses quadratic bezier curves for smooth line rendering.
- */
-private fun DrawScope.drawPath(
-    path: List<Offset>,
-    color: Color,
-    strokeWidth: Float = 10f
-) {
-    if (path.isEmpty()) return
-    
-    val smoothedPath = Path().apply {
-        moveTo(path.first().x, path.first().y)
-
-        // Smooth the path using quadratic bezier curves
-        // This creates a more natural drawing experience
-        for (i in 1 until path.size) {
-            val previousPoint = path[i - 1]
-            val currentPoint = path[i]
-            
-            // Use the midpoint as control point for smoother curves
-            val controlPoint = Offset(
-                x = (previousPoint.x + currentPoint.x) / 2f,
-                y = (previousPoint.y + currentPoint.y) / 2f
-            )
-            
-            quadraticTo(
-                x1 = controlPoint.x,
-                y1 = controlPoint.y,
-                x2 = currentPoint.x,
-                y2 = currentPoint.y
-            )
-        }
-    }
-
-    drawPath(
-        path = smoothedPath,
-        color = color,
-        style = Stroke(
-            width = strokeWidth,
-            cap = StrokeCap.Round,
-            join = StrokeJoin.Round
-        )
-    )
-}
-
-/**
- * Draws a shape based on its type and properties
- */
-private fun DrawScope.drawShape(shapeData: ShapeData) {
-    val topLeft = shapeData.topLeft
-    val size = shapeData.size
-    
-    val style = if (shapeData.isFilled) {
-        Fill
-    } else {
-        Stroke(
-            width = shapeData.strokeWidth,
-            cap = StrokeCap.Round,
-            join = StrokeJoin.Round
-        )
-    }
-    
-    when (shapeData.type) {
-        ShapeType.RECTANGLE -> {
-            drawRect(
-                color = shapeData.color,
-                topLeft = topLeft,
-                size = size,
-                style = style
-            )
-        }
-        ShapeType.CIRCLE -> {
-            val radius = min(size.width, size.height) / 2f
-            val center = Offset(
-                x = topLeft.x + size.width / 2f,
-                y = topLeft.y + size.height / 2f
-            )
-            drawCircle(
-                color = shapeData.color,
-                radius = radius,
-                center = center,
-                style = style
-            )
-        }
-        ShapeType.LINE -> {
-            drawLine(
-                color = shapeData.color,
-                start = shapeData.startPosition,
-                end = shapeData.endPosition,
-                strokeWidth = shapeData.strokeWidth,
-                cap = StrokeCap.Round
-            )
-        }
-        ShapeType.TRIANGLE -> {
-            val path = Path().apply {
-                moveTo(
-                    x = topLeft.x + size.width / 2f,
-                    y = topLeft.y
-                )
-                lineTo(
-                    x = topLeft.x,
-                    y = topLeft.y + size.height
-                )
-                lineTo(
-                    x = topLeft.x + size.width,
-                    y = topLeft.y + size.height
-                )
-                close()
-            }
-            drawPath(
-                path = path,
-                color = shapeData.color,
-                style = style
             )
         }
     }

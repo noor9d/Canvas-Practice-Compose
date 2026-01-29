@@ -13,5 +13,8 @@ data class BoardEntity(
     val id: Long = 0,
     val title: String,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val scale: Float = 1f,
+    val panOffsetX: Float = 0f,
+    val panOffsetY: Float = 0f
 )
