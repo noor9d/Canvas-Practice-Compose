@@ -26,7 +26,7 @@ import com.imagination.canvaspractice.data.local.database.entity.TextEntity
         TextEntity::class,
         ShapeEntity::class
     ],
-    version = 2,
+    version = 1,
     exportSchema = false
 )
 @TypeConverters(

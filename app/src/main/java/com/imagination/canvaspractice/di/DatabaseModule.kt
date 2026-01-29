@@ -26,9 +26,7 @@ object DatabaseModule {
             context,
             CanvasDatabase::class.java,
             "canvas_database"
-        )
-        .fallbackToDestructiveMigration() // For development - will recreate DB on schema change
-        .build()
+        ).build()
     }
 
     @Provides

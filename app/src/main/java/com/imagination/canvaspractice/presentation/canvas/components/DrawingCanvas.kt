@@ -21,10 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -33,43 +30,32 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Fill
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.util.fastForEach
 import com.imagination.canvaspractice.domain.constants.DrawingConstants.GRID_COLOR
 import com.imagination.canvaspractice.domain.constants.DrawingConstants.GRID_SIZE
 import com.imagination.canvaspractice.domain.constants.DrawingConstants.MAX_SCALE
 import com.imagination.canvaspractice.domain.constants.DrawingConstants.MIN_SCALE
-import com.imagination.canvaspractice.domain.model.CanvasItem
 import com.imagination.canvaspractice.domain.model.CanvasItemFactory
 import com.imagination.canvaspractice.domain.model.DrawingMode
-import com.imagination.canvaspractice.domain.model.PathData
 import com.imagination.canvaspractice.domain.model.PathCanvasItem
+import com.imagination.canvaspractice.domain.model.PathData
 import com.imagination.canvaspractice.domain.model.ShapeCanvasItem
 import com.imagination.canvaspractice.domain.model.ShapeData
-import com.imagination.canvaspractice.domain.model.ShapeType
-import com.imagination.canvaspractice.domain.model.TextCanvasItem
 import com.imagination.canvaspractice.domain.model.TextData
 import com.imagination.canvaspractice.presentation.canvas.DrawingAction
 import com.imagination.canvaspractice.ui.theme.CanvasPracticeTheme
-import java.lang.Math.pow
+import kotlinx.coroutines.delay
 import kotlin.math.ceil
 import kotlin.math.floor
-import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sqrt
 
@@ -122,7 +108,7 @@ fun DrawingCanvas(
     LaunchedEffect(initialScale, initialPanOffset) {
         // Only update if there's a significant difference to avoid conflicts during gestures
         val scaleDiff = kotlin.math.abs(scale - initialScale)
-        val panDiff = kotlin.math.sqrt(
+        val panDiff = sqrt(
             (offset.x - initialPanOffset.x).toDouble().pow(2.0) +
                     (offset.y - initialPanOffset.y).toDouble().pow(2.0)
         ).toFloat()
