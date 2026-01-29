@@ -40,5 +40,10 @@ data class DrawingState(
     val selectedShapeType: ShapeType = ShapeType.RECTANGLE,
     val selectedFontSize: Float = DrawingConstants.DEFAULT_FONT_SIZE,
     val currentTextInput: String = "",
-    val textInputPosition: Offset? = null
+    val textInputPosition: Offset? = null,
+    val textCreationScale: Float? = null, // Store scale when text input starts for proper font size calculation
+    
+    // Zoom/Pan state (persisted to database)
+    val scale: Float = 1f,
+    val panOffset: Offset = Offset.Zero
 )

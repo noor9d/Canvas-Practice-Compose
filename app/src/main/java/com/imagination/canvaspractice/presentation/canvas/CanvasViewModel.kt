@@ -15,6 +15,7 @@ import com.imagination.canvaspractice.domain.model.TextData
 import com.imagination.canvaspractice.domain.repository.BoardRepository
 import com.imagination.canvaspractice.presentation.navigation.Screen
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -27,6 +28,7 @@ class CanvasViewModel @Inject constructor(
 ) : BaseViewModel<UserEvent, UiEvent>() {
 
     private var currentBoardId: Long? = null
+    private var saveZoomPanJob: Job? = null
 
     private val _state = MutableStateFlow(
         DrawingState(
@@ -46,7 +48,7 @@ class CanvasViewModel @Inject constructor(
         when (action) {
             DrawingAction.OnClearCanvasClick -> onClearCanvasClicked()
             is DrawingAction.OnDraw -> onDraw(action.offset)
-            DrawingAction.OnNewPathStart -> onNewPathStart()
+            is DrawingAction.OnNewPathStart -> onNewPathStart(action.scale)
             DrawingAction.OnPathEnd -> onPathEnd()
             is DrawingAction.OnSelectColor -> onSelectColor(action.color)
             is DrawingAction.OnSelectMode -> onSelectMode(action.mode)
@@ -56,11 +58,12 @@ class CanvasViewModel @Inject constructor(
             is DrawingAction.OnSelectShapeType -> onSelectShapeType(action.shapeType)
             is DrawingAction.OnFontSizeChange -> onFontSizeChange(action.fontSize)
             is DrawingAction.OnTextInputChange -> onTextInputChange(action.text)
-            is DrawingAction.OnTextInputStart -> onTextInputStart(action.position)
+            is DrawingAction.OnTextInputStart -> onTextInputStart(action.position, action.scale)
             DrawingAction.OnTextInputDone -> onTextInputDone()
-            is DrawingAction.OnShapeStart -> onShapeStart(action.offset)
+            is DrawingAction.OnShapeStart -> onShapeStart(action.offset, action.scale)
             is DrawingAction.OnShapeUpdate -> onShapeUpdate(action.offset)
             DrawingAction.OnShapeEnd -> onShapeEnd()
+            is DrawingAction.OnZoomPanChange -> onZoomPanChange(action.scale, action.panOffset)
         }
     }
 
@@ -94,8 +97,10 @@ class CanvasViewModel @Inject constructor(
         _state.update { it.copy(selectedFontSize = fontSize) }
     }
 
-    private fun onShapeStart(offset: Offset) {
+    private fun onShapeStart(offset: Offset, scale: Float) {
         if (_state.value.drawingMode != DrawingMode.SHAPE) return
+        // Adjust stroke width for zoom level to maintain visual size
+        val adjustedStrokeWidth = DrawingConstants.DEFAULT_STROKE_WIDTH / scale
         _state.update {
             it.copy(
                 currentShape = ShapeData(
@@ -104,7 +109,7 @@ class CanvasViewModel @Inject constructor(
                     startPosition = offset,
                     endPosition = offset,
                     color = it.selectedColor,
-                    strokeWidth = DrawingConstants.DEFAULT_STROKE_WIDTH
+                    strokeWidth = adjustedStrokeWidth
                 )
             )
         }
@@ -140,7 +145,7 @@ class CanvasViewModel @Inject constructor(
         _state.update { it.copy(currentTextInput = text) }
     }
 
-    private fun onTextInputStart(position: Offset) {
+    private fun onTextInputStart(position: Offset, scale: Float) {
         if (_state.value.drawingMode != DrawingMode.TEXT) return
         _state.update {
             it.copy(
@@ -148,26 +153,33 @@ class CanvasViewModel @Inject constructor(
                 currentTextInput = ""
             )
         }
+        // Store scale for text creation
+        _state.update { it.copy(textCreationScale = scale) }
     }
 
     private fun onTextInputDone() {
         val position = _state.value.textInputPosition ?: return
         val textToAdd = _state.value.currentTextInput.ifBlank { "Text" }
         val boardId = currentBoardId ?: return
+        val scale = _state.value.textCreationScale ?: 1f
+        
+        // Adjust font size for zoom level to maintain visual size
+        val adjustedFontSize = _state.value.selectedFontSize / scale
         
         val newText = TextData(
             id = System.currentTimeMillis().toString(),
             text = textToAdd,
             position = position,
             color = _state.value.selectedColor,
-            fontSize = _state.value.selectedFontSize
+            fontSize = adjustedFontSize
         )
         
         _state.update {
             it.copy(
                 textInputPosition = null,
                 currentTextInput = "",
-                textElements = it.textElements + newText
+                textElements = it.textElements + newText,
+                textCreationScale = null // Reset after text creation
             )
         }
         
@@ -211,14 +223,16 @@ class CanvasViewModel @Inject constructor(
         }
     }
 
-    private fun onNewPathStart() {
+    private fun onNewPathStart(scale: Float) {
         if (_state.value.drawingMode != DrawingMode.PEN) return
+        // Adjust stroke width for zoom level to maintain visual size
+        val adjustedStrokeWidth = DrawingConstants.DEFAULT_STROKE_WIDTH / scale
         _state.update {
             it.copy(
                 currentPath = PathData(
                     id = System.currentTimeMillis().toString(),
                     color = it.selectedColor,
-                    strokeWidth = DrawingConstants.DEFAULT_STROKE_WIDTH,
+                    strokeWidth = adjustedStrokeWidth,
                     path = emptyList()
                 )
             )
@@ -281,16 +295,19 @@ class CanvasViewModel @Inject constructor(
             // Load all drawing elements
             val (paths, texts, shapes) = boardRepository.loadBoardData(boardIdLong)
             
-            _state.update {
-                it.copy(
-                    isLoading = false,
-                    errorMessage = null,
-                    board = board,
-                    paths = paths,
-                    textElements = texts,
-                    shapeElements = shapes
-                )
-            }
+        _state.update {
+            it.copy(
+                isLoading = false,
+                errorMessage = null,
+                board = board,
+                paths = paths,
+                textElements = texts,
+                shapeElements = shapes,
+                textCreationScale = null, // Reset scale after text creation
+                scale = board.scale,
+                panOffset = board.panOffset
+            )
+        }
 
         } catch (e: Exception) {
             _state.update {
@@ -298,6 +315,36 @@ class CanvasViewModel @Inject constructor(
                     isLoading = false,
                     errorMessage = e.message ?: "Failed to load board"
                 )
+            }
+        }
+    }
+
+    private fun onZoomPanChange(scale: Float, panOffset: Offset) {
+        val boardId = currentBoardId ?: return
+        
+        // Update state immediately
+        _state.update {
+            it.copy(
+                scale = scale,
+                panOffset = panOffset
+            )
+        }
+        
+        // Cancel previous save job
+        saveZoomPanJob?.cancel()
+        
+        // Save to database (debounced to avoid too many writes)
+        saveZoomPanJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(500) // Wait 500ms after last change
+            val boardEntity = boardRepository.getBoardById(boardId)
+            if (boardEntity != null) {
+                val updatedEntity = boardEntity.copy(
+                    scale = scale,
+                    panOffsetX = panOffset.x,
+                    panOffsetY = panOffset.y,
+                    updatedAt = System.currentTimeMillis()
+                )
+                boardRepository.updateBoard(updatedEntity)
             }
         }
     }
@@ -328,7 +375,7 @@ enum class CanvasSheet {
 
 sealed interface DrawingAction {
     // Pen drawing actions
-    data object OnNewPathStart : DrawingAction
+    data class OnNewPathStart(val scale: Float) : DrawingAction
     data class OnDraw(val offset: Offset) : DrawingAction
     data object OnPathEnd : DrawingAction
 
@@ -343,16 +390,19 @@ sealed interface DrawingAction {
 
     // Shape actions
     data class OnSelectShapeType(val shapeType: ShapeType) : DrawingAction
-    data class OnShapeStart(val offset: Offset) : DrawingAction
+    data class OnShapeStart(val offset: Offset, val scale: Float) : DrawingAction
     data class OnShapeUpdate(val offset: Offset) : DrawingAction
     data object OnShapeEnd : DrawingAction
 
     // Text actions
     data class OnFontSizeChange(val fontSize: Float) : DrawingAction
     data class OnTextInputChange(val text: String) : DrawingAction
-    data class OnTextInputStart(val position: Offset) : DrawingAction
+    data class OnTextInputStart(val position: Offset, val scale: Float) : DrawingAction
     data object OnTextInputDone : DrawingAction
 
     // Canvas actions
     data object OnClearCanvasClick : DrawingAction
+    
+    // Zoom/Pan actions
+    data class OnZoomPanChange(val scale: Float, val panOffset: Offset) : DrawingAction
 }

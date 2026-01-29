@@ -1,5 +1,6 @@
 package com.imagination.canvaspractice.data.mapper
 
+import androidx.compose.ui.geometry.Offset
 import com.imagination.canvaspractice.data.local.database.entity.BoardEntity
 import com.imagination.canvaspractice.presentation.dashboard.model.Board
 
@@ -11,7 +12,9 @@ object BoardMapper {
         return Board(
             id = id.toInt(),
             title = title,
-            thumbnailUrl = null
+            thumbnailUrl = null,
+            scale = scale,
+            panOffset = Offset(panOffsetX, panOffsetY)
         )
     }
 
@@ -20,7 +23,10 @@ object BoardMapper {
             id = id.toLong(),
             title = title,
             createdAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis()
+            updatedAt = System.currentTimeMillis(),
+            scale = scale,
+            panOffsetX = panOffset.x,
+            panOffsetY = panOffset.y
         )
     }
 
