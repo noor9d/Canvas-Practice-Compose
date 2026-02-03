@@ -46,6 +46,7 @@ interface BoardRepository {
     suspend fun insertPath(path: PathData, boardId: Long)
     suspend fun insertPaths(paths: List<PathData>, boardId: Long)
     suspend fun updatePath(path: PathData, boardId: Long)
+    suspend fun deletePath(pathId: String)
     suspend fun deletePathsByBoardId(boardId: Long)
 
     // Text operations
@@ -53,6 +54,7 @@ interface BoardRepository {
     suspend fun insertText(text: TextData, boardId: Long)
     suspend fun insertTexts(texts: List<TextData>, boardId: Long)
     suspend fun updateText(text: TextData, boardId: Long)
+    suspend fun deleteText(textId: String)
     suspend fun deleteTextsByBoardId(boardId: Long)
 
     // Shape operations
@@ -60,6 +62,7 @@ interface BoardRepository {
     suspend fun insertShape(shape: ShapeData, boardId: Long)
     suspend fun insertShapes(shapes: List<ShapeData>, boardId: Long)
     suspend fun updateShape(shape: ShapeData, boardId: Long)
+    suspend fun deleteShape(shapeId: String)
     suspend fun deleteShapesByBoardId(boardId: Long)
 
     // Load complete board data

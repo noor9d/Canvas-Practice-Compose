@@ -11,7 +11,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -33,6 +32,7 @@ import com.imagination.canvaspractice.ui.theme.CanvasPracticeTheme
  * @param onColorClick Callback when the color indicator is clicked
  * @param onFontSizeChange Callback when font size is changed
  * @param onClose Callback when the close button is clicked
+ * @param onDelete Optional callback when delete is clicked (e.g. when an item is selected); if null, delete icon is hidden
  */
 @Composable
 fun TextOptionsBar(
@@ -41,7 +41,8 @@ fun TextOptionsBar(
     fontSize: Float,
     onColorClick: () -> Unit,
     onFontSizeChange: (Float) -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onDelete: (() -> Unit)? = null
 ) {
     Row(
         modifier = modifier
@@ -51,12 +52,26 @@ fun TextOptionsBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = onClose) {
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = "Close",
-                tint = CanvasPracticeTheme.colorScheme.onBackground
-            )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onClose) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Close",
+                    tint = CanvasPracticeTheme.colorScheme.onBackground
+                )
+            }
+            if (onDelete != null) {
+                IconButton(onClick = onDelete) {
+                    Image(
+                        painter = painterResource(R.drawable.delete_2_svgrepo_com),
+                        contentDescription = "Delete",
+                        colorFilter = ColorFilter.tint(CanvasPracticeTheme.colorScheme.onBackground)
+                    )
+                }
+            }
         }
         
         // Font size controls

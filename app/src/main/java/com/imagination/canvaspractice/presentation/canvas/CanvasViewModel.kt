@@ -68,6 +68,11 @@ class CanvasViewModel @Inject constructor(
             is DrawingAction.OnSelectItem -> onSelectItem(action.item)
             DrawingAction.OnDeselect -> onDeselect()
             is DrawingAction.OnMoveSelectedItem -> onMoveSelectedItem(action.deltaX, action.deltaY)
+            DrawingAction.OnDeleteSelectedItem -> onDeleteSelectedItem()
+            DrawingAction.OnLassoModeChange -> onLassoModeChange()
+            is DrawingAction.OnLassoStart -> onLassoStart(action.offset)
+            is DrawingAction.OnLassoAddPoint -> onLassoAddPoint(action.offset)
+            DrawingAction.OnLassoEnd -> onLassoEnd()
         }
     }
 
@@ -75,7 +80,7 @@ class CanvasViewModel @Inject constructor(
         _state.update {
             it.copy(
                 drawingMode = mode,
-                selectedItem = null, // Clear selection when switching to drawing mode
+                selectedItems = emptyList(), // Clear selection when switching to drawing mode
                 textInputPosition = null,
                 currentTextInput = "",
                 isColorPickerVisible = false // Hide color picker when switching modes
@@ -326,63 +331,174 @@ class CanvasViewModel @Inject constructor(
     }
 
     private fun onSelectItem(item: SelectedItem) {
-        _state.update { it.copy(selectedItem = item) }
+        _state.update { it.copy(selectedItems = listOf(item)) }
     }
 
     private fun onDeselect() {
-        _state.update { it.copy(selectedItem = null) }
+        _state.update { it.copy(selectedItems = emptyList()) }
     }
 
     private fun onMoveSelectedItem(deltaX: Float, deltaY: Float) {
-        val selected = _state.value.selectedItem ?: return
+        val selectedItems = _state.value.selectedItems
+        if (selectedItems.isEmpty()) return
         val boardId = currentBoardId ?: return
+        val state = _state.value
 
-        when (selected) {
-            is SelectedItem.PathItem -> {
-                val path = _state.value.paths.find { it.id == selected.id } ?: return
-                val updatedPath = path.copy(
-                    path = path.path.map { p ->
-                        Offset(p.x + deltaX, p.y + deltaY)
-                    }
-                )
-                _state.update {
-                    it.copy(paths = it.paths.map { p ->
-                        if (p.id == selected.id) updatedPath else p
-                    })
+        var newPaths = state.paths
+        var newShapes = state.shapeElements
+        var newTexts = state.textElements
+        val pathsToSave = mutableListOf<PathData>()
+        val shapesToSave = mutableListOf<ShapeData>()
+        val textsToSave = mutableListOf<TextData>()
+
+        selectedItems.forEach { selected ->
+            when (selected) {
+                is SelectedItem.PathItem -> {
+                    val path = newPaths.find { it.id == selected.id } ?: return@forEach
+                    val updatedPath = path.copy(
+                        path = path.path.map { p ->
+                            Offset(p.x + deltaX, p.y + deltaY)
+                        }
+                    )
+                    newPaths = newPaths.map { if (it.id == selected.id) updatedPath else it }
+                    pathsToSave.add(updatedPath)
                 }
-                viewModelScope.launch {
-                    boardRepository.updatePath(updatedPath, boardId)
+                is SelectedItem.ShapeItem -> {
+                    val shape = newShapes.find { it.id == selected.id } ?: return@forEach
+                    val updatedShape = shape.copy(
+                        startPosition = Offset(shape.startPosition.x + deltaX, shape.startPosition.y + deltaY),
+                        endPosition = Offset(shape.endPosition.x + deltaX, shape.endPosition.y + deltaY)
+                    )
+                    newShapes = newShapes.map { if (it.id == selected.id) updatedShape else it }
+                    shapesToSave.add(updatedShape)
                 }
-            }
-            is SelectedItem.ShapeItem -> {
-                val shape = _state.value.shapeElements.find { it.id == selected.id } ?: return
-                val updatedShape = shape.copy(
-                    startPosition = Offset(shape.startPosition.x + deltaX, shape.startPosition.y + deltaY),
-                    endPosition = Offset(shape.endPosition.x + deltaX, shape.endPosition.y + deltaY)
-                )
-                _state.update {
-                    it.copy(shapeElements = it.shapeElements.map { s ->
-                        if (s.id == selected.id) updatedShape else s
-                    })
-                }
-                viewModelScope.launch {
-                    boardRepository.updateShape(updatedShape, boardId)
-                }
-            }
-            is SelectedItem.TextItem -> {
-                val text = _state.value.textElements.find { it.id == selected.id } ?: return
-                val updatedText = text.copy(
-                    position = Offset(text.position.x + deltaX, text.position.y + deltaY)
-                )
-                _state.update {
-                    it.copy(textElements = it.textElements.map { t ->
-                        if (t.id == selected.id) updatedText else t
-                    })
-                }
-                viewModelScope.launch {
-                    boardRepository.updateText(updatedText, boardId)
+                is SelectedItem.TextItem -> {
+                    val text = newTexts.find { it.id == selected.id } ?: return@forEach
+                    val updatedText = text.copy(
+                        position = Offset(text.position.x + deltaX, text.position.y + deltaY)
+                    )
+                    newTexts = newTexts.map { if (it.id == selected.id) updatedText else it }
+                    textsToSave.add(updatedText)
                 }
             }
+        }
+
+        _state.update {
+            it.copy(paths = newPaths, shapeElements = newShapes, textElements = newTexts)
+        }
+        viewModelScope.launch {
+            pathsToSave.forEach { boardRepository.updatePath(it, boardId) }
+            shapesToSave.forEach { boardRepository.updateShape(it, boardId) }
+            textsToSave.forEach { boardRepository.updateText(it, boardId) }
+        }
+    }
+
+    private fun onLassoModeChange() {
+        _state.update {
+            it.copy(
+                isLassoMode = !it.isLassoMode,
+                currentLassoPath = null
+            )
+        }
+    }
+
+    private fun onLassoStart(offset: Offset) {
+        _state.update { it.copy(currentLassoPath = listOf(offset)) }
+    }
+
+    private fun onLassoAddPoint(offset: Offset) {
+        val current = _state.value.currentLassoPath ?: return
+        _state.update { it.copy(currentLassoPath = current + offset) }
+    }
+
+    private fun onLassoEnd() {
+        val lassoPoints = _state.value.currentLassoPath ?: return
+        _state.update { it.copy(currentLassoPath = null) }
+        if (lassoPoints.size < 3) return
+        val closedPolygon = lassoPoints + lassoPoints.first()
+        val state = _state.value
+
+        val pathItems = state.paths
+            .filter { pathData ->
+                pathData.path.any { pt -> isPointInPolygon(pt, closedPolygon) }
+            }
+            .map { SelectedItem.PathItem(it.id) }
+
+        val shapeItems = state.shapeElements
+            .filter { shapeData ->
+                isPointInPolygon(shapeData.boundsCenter(), closedPolygon)
+            }
+            .map { SelectedItem.ShapeItem(it.id) }
+
+        val textItems = state.textElements
+            .filter { textData ->
+                isPointInPolygon(textData.estimatedCenter(), closedPolygon)
+            }
+            .map { SelectedItem.TextItem(it.id) }
+
+        _state.update {
+            it.copy(selectedItems = pathItems + shapeItems + textItems)
+        }
+    }
+
+    private fun ShapeData.boundsCenter(): Offset {
+        val padding = if (type == ShapeType.LINE) strokeWidth / 2f else 0f
+        val left = topLeft.x - padding
+        val top = topLeft.y - padding
+        val right = topLeft.x + size.width + padding
+        val bottom = topLeft.y + size.height + padding
+        return Offset(
+            x = (left + right) / 2f,
+            y = (top + bottom) / 2f
+        )
+    }
+
+    private fun TextData.estimatedCenter(): Offset {
+        val estimatedWidth = (text.length * fontSize * 0.65f).coerceAtLeast(fontSize * 0.5f)
+        val estimatedHeight = fontSize * 1.4f
+        return Offset(
+            x = position.x + estimatedWidth / 2f,
+            y = position.y + estimatedHeight / 2f
+        )
+    }
+
+    private fun isPointInPolygon(point: Offset, polygon: List<Offset>): Boolean {
+        var inside = false
+        val n = polygon.size - 1
+        var j = n - 1
+        for (i in 0 until n) {
+            val xi = polygon[i].x
+            val yi = polygon[i].y
+            val xj = polygon[j].x
+            val yj = polygon[j].y
+            val intersect = ((yi > point.y) != (yj > point.y)) &&
+                (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi)
+            if (intersect) inside = !inside
+            j = i
+        }
+        return inside
+    }
+
+    private fun onDeleteSelectedItem() {
+        val selectedItems = _state.value.selectedItems
+        if (selectedItems.isEmpty()) return
+        val boardId = currentBoardId ?: return
+        val pathIds = selectedItems.filterIsInstance<SelectedItem.PathItem>().map { it.id }
+        val shapeIds = selectedItems.filterIsInstance<SelectedItem.ShapeItem>().map { it.id }
+        val textIds = selectedItems.filterIsInstance<SelectedItem.TextItem>().map { it.id }
+        _state.update {
+            it.copy(
+                paths = it.paths.filter { p -> p.id !in pathIds },
+                shapeElements = it.shapeElements.filter { s -> s.id !in shapeIds },
+                textElements = it.textElements.filter { t -> t.id !in textIds },
+                selectedItems = emptyList()
+            )
+        }
+        viewModelScope.launch {
+            pathIds.forEach { boardRepository.deletePath(it) }
+            shapeIds.forEach { boardRepository.deleteShape(it) }
+            textIds.forEach { boardRepository.deleteText(it) }
+            boardRepository.updateBoardTimestamp(boardId)
         }
     }
 
@@ -477,4 +593,11 @@ sealed interface DrawingAction {
     data class OnSelectItem(val item: SelectedItem) : DrawingAction
     data object OnDeselect : DrawingAction
     data class OnMoveSelectedItem(val deltaX: Float, val deltaY: Float) : DrawingAction
+    data object OnDeleteSelectedItem : DrawingAction
+
+    // Lasso tool (multiple path selection)
+    data object OnLassoModeChange : DrawingAction
+    data class OnLassoStart(val offset: Offset) : DrawingAction
+    data class OnLassoAddPoint(val offset: Offset) : DrawingAction
+    data object OnLassoEnd : DrawingAction
 }

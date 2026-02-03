@@ -92,7 +92,9 @@ fun CanvasScreen(
                         shapeElements = state.shapeElements,
                         currentShape = state.currentShape,
                         drawingMode = state.drawingMode,
-                        selectedItem = state.selectedItem,
+                        selectedItems = state.selectedItems,
+                        isLassoMode = state.isLassoMode,
+                        currentLassoPath = state.currentLassoPath,
                         textInputPosition = state.textInputPosition,
                         textInput = state.currentTextInput,
                         selectedColor = state.selectedColor,
@@ -121,8 +123,63 @@ fun CanvasScreen(
                         )
                     }
 
-                    // Show mode-specific options bar (when drawing or when item selected) or main navigation bar
+                    // Show options bar: selection first (with delete), then mode-specific, then main nav
                     when {
+                        // Selection mode (single or multi): show bar for selected type with delete
+                        state.selectedItems.any { it is SelectedItem.PathItem } -> {
+                            PenOptionsBar(
+                                selectedColor = state.selectedColor,
+                                onColorClick = {
+                                    viewModel.onAction(DrawingAction.OnShowColorPicker)
+                                },
+                                onClose = {
+                                    viewModel.onAction(DrawingAction.OnDeselect)
+                                },
+                                onDelete = {
+                                    viewModel.onAction(DrawingAction.OnDeleteSelectedItem)
+                                },
+                                onLassoClick = {
+                                    viewModel.onAction(DrawingAction.OnLassoModeChange)
+                                },
+                                isLassoMode = state.isLassoMode
+                            )
+                        }
+                        state.selectedItems.any { it is SelectedItem.TextItem } -> {
+                            TextOptionsBar(
+                                selectedColor = state.selectedColor,
+                                fontSize = state.selectedFontSize,
+                                onColorClick = {
+                                    viewModel.onAction(DrawingAction.OnShowColorPicker)
+                                },
+                                onFontSizeChange = {
+                                    viewModel.onAction(DrawingAction.OnFontSizeChange(it))
+                                },
+                                onClose = {
+                                    viewModel.onAction(DrawingAction.OnDeselect)
+                                },
+                                onDelete = {
+                                    viewModel.onAction(DrawingAction.OnDeleteSelectedItem)
+                                }
+                            )
+                        }
+                        state.selectedItems.any { it is SelectedItem.ShapeItem } -> {
+                            ShapeOptionsBar(
+                                selectedColor = state.selectedColor,
+                                selectedShapeType = state.selectedShapeType,
+                                onColorClick = {
+                                    viewModel.onAction(DrawingAction.OnShowColorPicker)
+                                },
+                                onSelectShapeType = {
+                                    viewModel.onAction(DrawingAction.OnSelectShapeType(it))
+                                },
+                                onClose = {
+                                    viewModel.onAction(DrawingAction.OnDeselect)
+                                },
+                                onDelete = {
+                                    viewModel.onAction(DrawingAction.OnDeleteSelectedItem)
+                                }
+                            )
+                        }
                         state.drawingMode == DrawingMode.PEN -> {
                             PenOptionsBar(
                                 selectedColor = state.selectedColor,
@@ -131,7 +188,11 @@ fun CanvasScreen(
                                 },
                                 onClose = {
                                     viewModel.onAction(DrawingAction.OnCloseModeOptions)
-                                }
+                                },
+                                onLassoClick = {
+                                    viewModel.onAction(DrawingAction.OnLassoModeChange)
+                                },
+                                isLassoMode = state.isLassoMode
                             )
                         }
                         state.drawingMode == DrawingMode.TEXT -> {
@@ -169,48 +230,6 @@ fun CanvasScreen(
                                 },
                                 onClose = {
                                     viewModel.onAction(DrawingAction.OnCloseModeOptions)
-                                }
-                            )
-                        }
-                        // Selection mode: show options bar for the selected item type
-                        state.selectedItem is SelectedItem.PathItem -> {
-                            PenOptionsBar(
-                                selectedColor = state.selectedColor,
-                                onColorClick = {
-                                    viewModel.onAction(DrawingAction.OnShowColorPicker)
-                                },
-                                onClose = {
-                                    viewModel.onAction(DrawingAction.OnDeselect)
-                                }
-                            )
-                        }
-                        state.selectedItem is SelectedItem.TextItem -> {
-                            TextOptionsBar(
-                                selectedColor = state.selectedColor,
-                                fontSize = state.selectedFontSize,
-                                onColorClick = {
-                                    viewModel.onAction(DrawingAction.OnShowColorPicker)
-                                },
-                                onFontSizeChange = {
-                                    viewModel.onAction(DrawingAction.OnFontSizeChange(it))
-                                },
-                                onClose = {
-                                    viewModel.onAction(DrawingAction.OnDeselect)
-                                }
-                            )
-                        }
-                        state.selectedItem is SelectedItem.ShapeItem -> {
-                            ShapeOptionsBar(
-                                selectedColor = state.selectedColor,
-                                selectedShapeType = state.selectedShapeType,
-                                onColorClick = {
-                                    viewModel.onAction(DrawingAction.OnShowColorPicker)
-                                },
-                                onSelectShapeType = {
-                                    viewModel.onAction(DrawingAction.OnSelectShapeType(it))
-                                },
-                                onClose = {
-                                    viewModel.onAction(DrawingAction.OnDeselect)
                                 }
                             )
                         }

@@ -78,6 +78,8 @@ class BoardRepositoryImpl @Inject constructor(
         insertPath(path, boardId)
     }
 
+    override suspend fun deletePath(pathId: String) = pathDao.deletePath(pathId)
+
     override suspend fun deletePathsByBoardId(boardId: Long) = pathDao.deletePathsByBoardId(boardId)
 
     // Text operations
@@ -117,6 +119,8 @@ class BoardRepositoryImpl @Inject constructor(
     override suspend fun updateText(text: TextData, boardId: Long) {
         insertText(text, boardId)
     }
+
+    override suspend fun deleteText(textId: String) = textDao.deleteText(textId)
 
     override suspend fun deleteTextsByBoardId(boardId: Long) = textDao.deleteTextsByBoardId(boardId)
 
@@ -161,6 +165,8 @@ class BoardRepositoryImpl @Inject constructor(
     override suspend fun updateShape(shape: ShapeData, boardId: Long) {
         insertShape(shape, boardId)
     }
+
+    override suspend fun deleteShape(shapeId: String) = shapeDao.deleteShape(shapeId)
 
     override suspend fun deleteShapesByBoardId(boardId: Long) = shapeDao.deleteShapesByBoardId(boardId)
 

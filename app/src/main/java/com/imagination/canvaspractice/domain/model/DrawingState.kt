@@ -48,6 +48,13 @@ data class DrawingState(
     val scale: Float = 1f,
     val panOffset: Offset = Offset.Zero,
 
-    // Selection state
-    val selectedItem: SelectedItem? = null
-)
+    // Selection state (supports multiple selection e.g. via Lasso)
+    val selectedItems: List<SelectedItem> = emptyList(),
+
+    // Lasso tool: when true, next stroke on canvas selects paths inside the drawn shape
+    val isLassoMode: Boolean = false,
+    val currentLassoPath: List<Offset>? = null
+) {
+    /** Single selected item when exactly one is selected; null otherwise. */
+    val selectedItem: SelectedItem? get() = selectedItems.singleOrNull()
+}

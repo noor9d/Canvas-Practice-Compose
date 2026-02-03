@@ -91,7 +91,9 @@ fun DrawingCanvas(
     shapeElements: List<ShapeData>,
     currentShape: ShapeData?,
     drawingMode: DrawingMode?,
-    selectedItem: SelectedItem? = null,
+    selectedItems: List<SelectedItem> = emptyList(),
+    isLassoMode: Boolean = false,
+    currentLassoPath: List<Offset>? = null,
     textInputPosition: Offset?,
     textInput: String,
     selectedColor: Color,
@@ -214,30 +216,77 @@ fun DrawingCanvas(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(drawingMode, scale, offset, selectedItem) {
-                    // Handle drawing gestures (receive screen coordinates, convert to canvas)
-                    when (drawingMode) {
-                        DrawingMode.PEN -> {
-                            detectDragGestures(
-                                onDragStart = { screenOffset ->
-                                    val canvasOffset = (screenOffset - offset) / scale
-                                    onAction(DrawingAction.OnNewPathStart(scale))
-                                    onAction(DrawingAction.OnDraw(canvasOffset))
-                                },
-                                onDragEnd = {
-                                    onAction(DrawingAction.OnPathEnd)
-                                },
-                                onDrag = { change, _ ->
-                                    val canvasOffset = (change.position - offset) / scale
-                                    onAction(DrawingAction.OnDraw(canvasOffset))
-                                },
-                                onDragCancel = {
-                                    onAction(DrawingAction.OnPathEnd)
+                .pointerInput(drawingMode, scale, offset, selectedItems, isLassoMode) {
+                    val canvasItems = canvasItemsRef.value
+                    when {
+                        // When anything is selected (single or lasso), tap outside deselects; tap on selection allows move
+                        selectedItems.isNotEmpty() -> {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                val canvasOffset = (down.position - offset) / scale
+                                val hitItem = canvasItems.lastOrNull { it.containsPoint(canvasOffset.x, canvasOffset.y, textMeasurer) }
+                                val tapInsideSelection = selectedItems.any { selected ->
+                                    val sel = canvasItems.find { it.getItemType() == selected }
+                                    sel?.let { s ->
+                                        val bounds = (s as? TextCanvasItem)?.getBounds(textMeasurer) ?: s.getBounds()
+                                        val padding = 8f / scale
+                                        bounds.inflate(padding).contains(canvasOffset)
+                                    } ?: false
                                 }
-                            )
+                                if (tapInsideSelection) {
+                                    // Tap on selected: keep selection, enter move loop
+                                } else if (hitItem != null) {
+                                    onAction(DrawingAction.OnSelectItem(hitItem.getItemType()))
+                                } else {
+                                    onAction(DrawingAction.OnDeselect)
+                                    return@awaitEachGesture
+                                }
+                                var lastPosition = down.position
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    if (event.changes.all { !it.pressed }) break
+                                    val currentPosition = event.changes.first().position
+                                    val deltaScreen = currentPosition - lastPosition
+                                    lastPosition = currentPosition
+                                    if (deltaScreen.x != 0f || deltaScreen.y != 0f) {
+                                        onAction(DrawingAction.OnMoveSelectedItem(deltaScreen.x / scale, deltaScreen.y / scale))
+                                    }
+                                }
+                            }
                         }
 
-                        DrawingMode.SHAPE -> {
+                        DrawingMode.PEN == drawingMode -> {
+                            if (isLassoMode) {
+                                detectDragGestures(
+                                    onDragStart = { screenOffset ->
+                                        val canvasOffset = (screenOffset - offset) / scale
+                                        onAction(DrawingAction.OnLassoStart(canvasOffset))
+                                    },
+                                    onDragEnd = { onAction(DrawingAction.OnLassoEnd) },
+                                    onDrag = { change, _ ->
+                                        val canvasOffset = (change.position - offset) / scale
+                                        onAction(DrawingAction.OnLassoAddPoint(canvasOffset))
+                                    },
+                                    onDragCancel = { onAction(DrawingAction.OnLassoEnd) }
+                                )
+                            } else {
+                                detectDragGestures(
+                                    onDragStart = { screenOffset ->
+                                        val canvasOffset = (screenOffset - offset) / scale
+                                        onAction(DrawingAction.OnNewPathStart(scale))
+                                        onAction(DrawingAction.OnDraw(canvasOffset))
+                                    },
+                                    onDragEnd = { onAction(DrawingAction.OnPathEnd) },
+                                    onDrag = { change, _ ->
+                                        val canvasOffset = (change.position - offset) / scale
+                                        onAction(DrawingAction.OnDraw(canvasOffset))
+                                    },
+                                    onDragCancel = { onAction(DrawingAction.OnPathEnd) }
+                                )
+                            }
+                        }
+
+                        DrawingMode.SHAPE == drawingMode -> {
                             detectDragGestures(
                                 onDragStart = { screenOffset ->
                                     val canvasOffset = (screenOffset - offset) / scale
@@ -256,70 +305,31 @@ fun DrawingCanvas(
                             )
                         }
 
-                        DrawingMode.TEXT -> {
+                        DrawingMode.TEXT == drawingMode -> {
                             detectTapGestures { screenOffset ->
                                 val canvasOffset = (screenOffset - offset) / scale
                                 onAction(DrawingAction.OnTextInputStart(canvasOffset, scale))
                             }
                         }
 
-                        null -> {
-                            val canvasItems = canvasItemsRef.value
-                            when {
-                                // Selection mode: item selected — drag moves item, canvas does not pan
-                                selectedItem != null -> {
-                                    awaitEachGesture {
-                                        val down = awaitFirstDown(requireUnconsumed = false)
-                                        val canvasOffset = (down.position - offset) / scale
-                                        val hitItem = canvasItems.lastOrNull { it.containsPoint(canvasOffset.x, canvasOffset.y, textMeasurer) }
-                                        val selectedCanvasItem = canvasItems.find { it.getItemType() == selectedItem }
-                                        val tapInsideSelection = selectedCanvasItem?.let { sel ->
-                                            val bounds = (sel as? TextCanvasItem)?.getBounds(textMeasurer) ?: sel.getBounds()
-                                            val padding = 8f / scale
-                                            bounds.inflate(padding).contains(canvasOffset)
-                                        } ?: false
-                                        if (tapInsideSelection) {
-                                            // Tap on selected item: keep selection, enter move loop
-                                        } else if (hitItem != null) {
-                                            onAction(DrawingAction.OnSelectItem(hitItem.getItemType()))
-                                        } else {
-                                            onAction(DrawingAction.OnDeselect)
-                                            return@awaitEachGesture
-                                        }
-                                        var lastPosition = down.position
-                                        while (true) {
-                                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                                            if (event.changes.all { !it.pressed }) break
-                                            val currentPosition = event.changes.first().position
-                                            val deltaScreen = currentPosition - lastPosition
-                                            lastPosition = currentPosition
-                                            if (deltaScreen.x != 0f || deltaScreen.y != 0f) {
-                                                onAction(DrawingAction.OnMoveSelectedItem(deltaScreen.x / scale, deltaScreen.y / scale))
-                                            }
-                                        }
+                        else -> {
+                            // drawingMode == null: tap to select, tap outside to deselect
+                            detectTapGestures(
+                                onTap = { screenOffset ->
+                                    val canvasOffset = (screenOffset - offset) / scale
+                                    val hitItem = canvasItems.lastOrNull { it.containsPoint(canvasOffset.x, canvasOffset.y, textMeasurer) }
+                                    if (hitItem != null) {
+                                        onAction(DrawingAction.OnSelectItem(hitItem.getItemType()))
+                                    } else {
+                                        onAction(DrawingAction.OnDeselect)
                                     }
                                 }
-                                // No selection: tap to select/deselect only; transform handles pan/zoom
-                                else -> {
-                                    detectTapGestures(
-                                        onTap = { screenOffset ->
-                                            val canvasOffset = (screenOffset - offset) / scale
-                                            val hitItem = canvasItems.lastOrNull { it.containsPoint(canvasOffset.x, canvasOffset.y, textMeasurer) }
-                                            if (hitItem != null) {
-                                                onAction(DrawingAction.OnSelectItem(hitItem.getItemType()))
-                                            } else {
-                                                onAction(DrawingAction.OnDeselect)
-                                            }
-                                        }
-                                    )
-                                }
-                            }
+                            )
                         }
                     }
                 }
-                .pointerInput(drawingMode, selectedItem) {
-                    // Pan/zoom ONLY when no drawing mode AND no selection (selection mode = move item, not canvas)
-                    if (drawingMode == null && selectedItem == null) {
+                .pointerInput(drawingMode, selectedItems) {
+                    if (drawingMode == null && selectedItems.isEmpty()) {
                         detectTransformGestures { centroid, pan, zoom, _ ->
                             val (newOffset, newScale) = zoomingItemOrCanvas(
                                 pan = pan,
@@ -377,12 +387,27 @@ fun DrawingCanvas(
                     }
                 }
 
-                // Draw selection (Figma-style dashed border) for selected item
-                selectedItem?.let { selected ->
+                // Draw selection for each selected item
+                selectedItems.forEach { selected ->
                     canvasItems
                         .find { it.getItemType() == selected }
                         ?.takeIf { it.isVisible(viewport) }
                         ?.drawSelection(this, selectionColor, textMeasurer)
+                }
+
+                // Draw lasso path while drawing
+                currentLassoPath?.let { lassoPoints ->
+                    if (lassoPoints.size >= 2) {
+                        val lassoPath = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(lassoPoints.first().x, lassoPoints.first().y)
+                            lassoPoints.drop(1).forEach { p -> lineTo(p.x, p.y) }
+                        }
+                        drawPath(
+                            path = lassoPath,
+                            color = selectionColor,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f)
+                        )
+                    }
                 }
 
                 // Draw current path being drawn (if any)
