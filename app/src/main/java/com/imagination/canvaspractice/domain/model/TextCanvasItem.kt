@@ -2,7 +2,11 @@ package com.imagination.canvaspractice.domain.model
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -15,6 +19,10 @@ import androidx.compose.ui.unit.sp
 class TextCanvasItem(
     private var textData: TextData
 ) : CanvasItem {
+
+    override fun getId(): String = textData.id
+
+    override fun getItemType(): SelectedItem = SelectedItem.TextItem(textData.id)
 
     override fun draw(scope: DrawScope, textMeasurer: TextMeasurer) {
         val textLayoutResult = textMeasurer.measure(
@@ -30,19 +38,20 @@ class TextCanvasItem(
         )
     }
 
-    override fun drawSelection(scope: DrawScope) {
-        val bounds = getBounds()
-        // Draw selection rectangle around the text
+    override fun drawSelection(scope: DrawScope, selectionColor: Color, textMeasurer: TextMeasurer?) {
+        val bounds = textMeasurer?.let { getBounds(it) } ?: getBounds()
+        val pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 4f), 0f)
         scope.drawRect(
-            color = textData.color.copy(alpha = 0.3f),
+            color = selectionColor,
             topLeft = Offset(bounds.left, bounds.top),
-            size = androidx.compose.ui.geometry.Size(bounds.width, bounds.height)
+            size = Size(bounds.width, bounds.height),
+            style = Stroke(width = 2f, pathEffect = pathEffect)
         )
     }
 
-    override fun containsPoint(x: Float, y: Float): Boolean {
-        val bounds = getBounds()
-        return bounds.contains(Offset(x, y))
+    override fun containsPoint(x: Float, y: Float, textMeasurer: TextMeasurer?): Boolean {
+        val bounds = textMeasurer?.let { getBounds(it) } ?: getBounds()
+        return bounds.inflate(8f).contains(Offset(x, y))
     }
 
     override fun translate(deltaX: Float, deltaY: Float) {
@@ -55,12 +64,9 @@ class TextCanvasItem(
     }
 
     override fun getBounds(): Rect {
-        // For text, we need to measure it to get accurate bounds
-        // Since we don't have TextMeasurer here, we'll estimate based on font size
-        // In practice, this should be calculated when the item is created or cached
-        val estimatedWidth = textData.text.length * textData.fontSize * 0.6f // Rough estimate
-        val estimatedHeight = textData.fontSize * 1.2f // Rough estimate
-        
+        // Estimate based on font size (used when TextMeasurer not available)
+        val estimatedWidth = (textData.text.length * textData.fontSize * 0.65f).coerceAtLeast(textData.fontSize * 0.5f)
+        val estimatedHeight = textData.fontSize * 1.4f
         return Rect(
             left = textData.position.x,
             top = textData.position.y,

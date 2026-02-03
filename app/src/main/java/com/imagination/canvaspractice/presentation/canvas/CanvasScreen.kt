@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.imagination.canvaspractice.domain.constants.DrawingConstants
 import com.imagination.canvaspractice.domain.model.DrawingMode
+import com.imagination.canvaspractice.domain.model.SelectedItem
 import com.imagination.canvaspractice.presentation.canvas.components.CanvasTopBar
 import com.imagination.canvaspractice.presentation.canvas.components.DrawingCanvas
 import com.imagination.canvaspractice.presentation.components.BottomNavigationBar
@@ -91,6 +92,9 @@ fun CanvasScreen(
                         shapeElements = state.shapeElements,
                         currentShape = state.currentShape,
                         drawingMode = state.drawingMode,
+                        selectedItems = state.selectedItems,
+                        isLassoMode = state.isLassoMode,
+                        currentLassoPath = state.currentLassoPath,
                         textInputPosition = state.textInputPosition,
                         textInput = state.currentTextInput,
                         selectedColor = state.selectedColor,
@@ -119,9 +123,64 @@ fun CanvasScreen(
                         )
                     }
 
-                    // Show mode-specific options bar or main navigation bar
-                    when (state.drawingMode) {
-                        DrawingMode.PEN -> {
+                    // Show options bar: selection first (with delete), then mode-specific, then main nav
+                    when {
+                        // Selection mode (single or multi): show bar for selected type with delete
+                        state.selectedItems.any { it is SelectedItem.PathItem } -> {
+                            PenOptionsBar(
+                                selectedColor = state.selectedColor,
+                                onColorClick = {
+                                    viewModel.onAction(DrawingAction.OnShowColorPicker)
+                                },
+                                onClose = {
+                                    viewModel.onAction(DrawingAction.OnDeselect)
+                                },
+                                onDelete = {
+                                    viewModel.onAction(DrawingAction.OnDeleteSelectedItem)
+                                },
+                                onLassoClick = {
+                                    viewModel.onAction(DrawingAction.OnLassoModeChange)
+                                },
+                                isLassoMode = state.isLassoMode
+                            )
+                        }
+                        state.selectedItems.any { it is SelectedItem.TextItem } -> {
+                            TextOptionsBar(
+                                selectedColor = state.selectedColor,
+                                fontSize = state.selectedFontSize,
+                                onColorClick = {
+                                    viewModel.onAction(DrawingAction.OnShowColorPicker)
+                                },
+                                onFontSizeChange = {
+                                    viewModel.onAction(DrawingAction.OnFontSizeChange(it))
+                                },
+                                onClose = {
+                                    viewModel.onAction(DrawingAction.OnDeselect)
+                                },
+                                onDelete = {
+                                    viewModel.onAction(DrawingAction.OnDeleteSelectedItem)
+                                }
+                            )
+                        }
+                        state.selectedItems.any { it is SelectedItem.ShapeItem } -> {
+                            ShapeOptionsBar(
+                                selectedColor = state.selectedColor,
+                                selectedShapeType = state.selectedShapeType,
+                                onColorClick = {
+                                    viewModel.onAction(DrawingAction.OnShowColorPicker)
+                                },
+                                onSelectShapeType = {
+                                    viewModel.onAction(DrawingAction.OnSelectShapeType(it))
+                                },
+                                onClose = {
+                                    viewModel.onAction(DrawingAction.OnDeselect)
+                                },
+                                onDelete = {
+                                    viewModel.onAction(DrawingAction.OnDeleteSelectedItem)
+                                }
+                            )
+                        }
+                        state.drawingMode == DrawingMode.PEN -> {
                             PenOptionsBar(
                                 selectedColor = state.selectedColor,
                                 onColorClick = {
@@ -129,15 +188,15 @@ fun CanvasScreen(
                                 },
                                 onClose = {
                                     viewModel.onAction(DrawingAction.OnCloseModeOptions)
-                                }
+                                },
+                                onLassoClick = {
+                                    viewModel.onAction(DrawingAction.OnLassoModeChange)
+                                },
+                                isLassoMode = state.isLassoMode
                             )
                         }
-
-                        DrawingMode.TEXT -> {
-                            // Get theme color in composable context
+                        state.drawingMode == DrawingMode.TEXT -> {
                             val defaultTextColor = CanvasPracticeTheme.colorScheme.onSurface
-                            
-                            // Set default text color to theme color if still using default
                             LaunchedEffect(state.drawingMode) {
                                 if (state.selectedColor == DrawingConstants.DEFAULT_COLOR) {
                                     viewModel.onAction(
@@ -145,7 +204,6 @@ fun CanvasScreen(
                                     )
                                 }
                             }
-                            
                             TextOptionsBar(
                                 selectedColor = state.selectedColor,
                                 fontSize = state.selectedFontSize,
@@ -160,8 +218,7 @@ fun CanvasScreen(
                                 }
                             )
                         }
-
-                        DrawingMode.SHAPE -> {
+                        state.drawingMode == DrawingMode.SHAPE -> {
                             ShapeOptionsBar(
                                 selectedColor = state.selectedColor,
                                 selectedShapeType = state.selectedShapeType,
@@ -176,8 +233,7 @@ fun CanvasScreen(
                                 }
                             )
                         }
-
-                        null -> {
+                        else -> {
                             BottomNavigationBar(
                                 onModeSelected = { mode ->
                                     viewModel.onAction(DrawingAction.OnSelectMode(mode))

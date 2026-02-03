@@ -3,6 +3,7 @@ package com.imagination.canvaspractice.domain.model
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import com.imagination.canvaspractice.domain.constants.DrawingConstants
+import com.imagination.canvaspractice.domain.model.SelectedItem
 import com.imagination.canvaspractice.presentation.dashboard.model.Board
 
 /**
@@ -45,5 +46,15 @@ data class DrawingState(
     
     // Zoom/Pan state (persisted to database)
     val scale: Float = 1f,
-    val panOffset: Offset = Offset.Zero
-)
+    val panOffset: Offset = Offset.Zero,
+
+    // Selection state (supports multiple selection e.g. via Lasso)
+    val selectedItems: List<SelectedItem> = emptyList(),
+
+    // Lasso tool: when true, next stroke on canvas selects paths inside the drawn shape
+    val isLassoMode: Boolean = false,
+    val currentLassoPath: List<Offset>? = null
+) {
+    /** Single selected item when exactly one is selected; null otherwise. */
+    val selectedItem: SelectedItem? get() = selectedItems.singleOrNull()
+}

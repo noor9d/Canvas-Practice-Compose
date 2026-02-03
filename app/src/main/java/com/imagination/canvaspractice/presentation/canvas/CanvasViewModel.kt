@@ -1,12 +1,15 @@
 package com.imagination.canvaspractice.presentation.canvas
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewModelScope
 import com.imagination.canvaspractice.core.base.BaseViewModel
 import com.imagination.canvaspractice.data.mapper.BoardMapper.toDomain
 import com.imagination.canvaspractice.domain.constants.DrawingConstants
 import com.imagination.canvaspractice.domain.model.DrawingMode
+import com.imagination.canvaspractice.domain.model.SelectedItem
 import com.imagination.canvaspractice.domain.model.DrawingState
 import com.imagination.canvaspractice.domain.model.PathData
 import com.imagination.canvaspractice.domain.model.ShapeData
@@ -29,6 +32,16 @@ class CanvasViewModel @Inject constructor(
 
     private var currentBoardId: Long? = null
     private var saveZoomPanJob: Job? = null
+
+    /** Snapshot of paths/shapes/texts at resize start; scale is applied relative to this. */
+    private data class ResizeSnapshot(
+        val paths: List<PathData>,
+        val shapes: List<ShapeData>,
+        val texts: List<TextData>,
+        val selectedItems: List<SelectedItem>,
+        val selectionCenter: Offset
+    )
+    private var resizeSnapshot: ResizeSnapshot? = null
 
     private val _state = MutableStateFlow(
         DrawingState(
@@ -64,6 +77,17 @@ class CanvasViewModel @Inject constructor(
             is DrawingAction.OnShapeUpdate -> onShapeUpdate(action.offset)
             DrawingAction.OnShapeEnd -> onShapeEnd()
             is DrawingAction.OnZoomPanChange -> onZoomPanChange(action.scale, action.panOffset)
+            is DrawingAction.OnSelectItem -> onSelectItem(action.item)
+            DrawingAction.OnDeselect -> onDeselect()
+            is DrawingAction.OnMoveSelectedItem -> onMoveSelectedItem(action.deltaX, action.deltaY)
+            DrawingAction.OnDeleteSelectedItem -> onDeleteSelectedItem()
+            DrawingAction.OnLassoModeChange -> onLassoModeChange()
+            is DrawingAction.OnLassoStart -> onLassoStart(action.offset)
+            is DrawingAction.OnLassoAddPoint -> onLassoAddPoint(action.offset)
+            DrawingAction.OnLassoEnd -> onLassoEnd()
+            DrawingAction.OnResizeStart -> onResizeStart()
+            is DrawingAction.OnScaleSelectedItem -> onScaleSelectedItem(action.scaleX, action.scaleY)
+            DrawingAction.OnResizeEnd -> onResizeEnd()
         }
     }
 
@@ -71,6 +95,7 @@ class CanvasViewModel @Inject constructor(
         _state.update {
             it.copy(
                 drawingMode = mode,
+                selectedItems = emptyList(), // Clear selection when switching to drawing mode
                 textInputPosition = null,
                 currentTextInput = "",
                 isColorPickerVisible = false // Hide color picker when switching modes
@@ -84,7 +109,8 @@ class CanvasViewModel @Inject constructor(
                 drawingMode = null,
                 textInputPosition = null,
                 currentTextInput = "",
-                isColorPickerVisible = false // Hide color picker when closing tool options
+                isColorPickerVisible = false, // Hide color picker when closing tool options
+                // Keep selection when closing options - user returns to selection/move mode
             )
         }
     }
@@ -319,6 +345,342 @@ class CanvasViewModel @Inject constructor(
         }
     }
 
+    private fun onSelectItem(item: SelectedItem) {
+        _state.update { it.copy(selectedItems = listOf(item)) }
+    }
+
+    private fun onDeselect() {
+        _state.update { it.copy(selectedItems = emptyList()) }
+    }
+
+    private fun onMoveSelectedItem(deltaX: Float, deltaY: Float) {
+        val selectedItems = _state.value.selectedItems
+        if (selectedItems.isEmpty()) return
+        val boardId = currentBoardId ?: return
+        val state = _state.value
+
+        var newPaths = state.paths
+        var newShapes = state.shapeElements
+        var newTexts = state.textElements
+        val pathsToSave = mutableListOf<PathData>()
+        val shapesToSave = mutableListOf<ShapeData>()
+        val textsToSave = mutableListOf<TextData>()
+
+        selectedItems.forEach { selected ->
+            when (selected) {
+                is SelectedItem.PathItem -> {
+                    val path = newPaths.find { it.id == selected.id } ?: return@forEach
+                    val updatedPath = path.copy(
+                        path = path.path.map { p ->
+                            Offset(p.x + deltaX, p.y + deltaY)
+                        }
+                    )
+                    newPaths = newPaths.map { if (it.id == selected.id) updatedPath else it }
+                    pathsToSave.add(updatedPath)
+                }
+                is SelectedItem.ShapeItem -> {
+                    val shape = newShapes.find { it.id == selected.id } ?: return@forEach
+                    val updatedShape = shape.copy(
+                        startPosition = Offset(shape.startPosition.x + deltaX, shape.startPosition.y + deltaY),
+                        endPosition = Offset(shape.endPosition.x + deltaX, shape.endPosition.y + deltaY)
+                    )
+                    newShapes = newShapes.map { if (it.id == selected.id) updatedShape else it }
+                    shapesToSave.add(updatedShape)
+                }
+                is SelectedItem.TextItem -> {
+                    val text = newTexts.find { it.id == selected.id } ?: return@forEach
+                    val updatedText = text.copy(
+                        position = Offset(text.position.x + deltaX, text.position.y + deltaY)
+                    )
+                    newTexts = newTexts.map { if (it.id == selected.id) updatedText else it }
+                    textsToSave.add(updatedText)
+                }
+            }
+        }
+
+        _state.update {
+            it.copy(paths = newPaths, shapeElements = newShapes, textElements = newTexts)
+        }
+        viewModelScope.launch {
+            pathsToSave.forEach { boardRepository.updatePath(it, boardId) }
+            shapesToSave.forEach { boardRepository.updateShape(it, boardId) }
+            textsToSave.forEach { boardRepository.updateText(it, boardId) }
+        }
+    }
+
+    private fun onLassoModeChange() {
+        _state.update {
+            it.copy(
+                isLassoMode = !it.isLassoMode,
+                currentLassoPath = null
+            )
+        }
+    }
+
+    private fun onLassoStart(offset: Offset) {
+        _state.update { it.copy(currentLassoPath = listOf(offset)) }
+    }
+
+    private fun onLassoAddPoint(offset: Offset) {
+        val current = _state.value.currentLassoPath ?: return
+        _state.update { it.copy(currentLassoPath = current + offset) }
+    }
+
+    private fun onLassoEnd() {
+        val lassoPoints = _state.value.currentLassoPath ?: return
+        _state.update { it.copy(currentLassoPath = null) }
+        if (lassoPoints.size < 3) return
+        val closedPolygon = lassoPoints + lassoPoints.first()
+        val state = _state.value
+
+        val pathItems = state.paths
+            .filter { pathData ->
+                pathData.path.any { pt -> isPointInPolygon(pt, closedPolygon) }
+            }
+            .map { SelectedItem.PathItem(it.id) }
+
+        val shapeItems = state.shapeElements
+            .filter { shapeData ->
+                isPointInPolygon(shapeData.boundsCenter(), closedPolygon)
+            }
+            .map { SelectedItem.ShapeItem(it.id) }
+
+        val textItems = state.textElements
+            .filter { textData ->
+                isPointInPolygon(textData.estimatedCenter(), closedPolygon)
+            }
+            .map { SelectedItem.TextItem(it.id) }
+
+        _state.update {
+            it.copy(selectedItems = pathItems + shapeItems + textItems)
+        }
+    }
+
+    private fun ShapeData.boundsCenter(): Offset {
+        val padding = if (type == ShapeType.LINE) strokeWidth / 2f else 0f
+        val left = topLeft.x - padding
+        val top = topLeft.y - padding
+        val right = topLeft.x + size.width + padding
+        val bottom = topLeft.y + size.height + padding
+        return Offset(
+            x = (left + right) / 2f,
+            y = (top + bottom) / 2f
+        )
+    }
+
+    private fun TextData.estimatedCenter(): Offset {
+        val estimatedWidth = (text.length * fontSize * 0.65f).coerceAtLeast(fontSize * 0.5f)
+        val estimatedHeight = fontSize * 1.4f
+        return Offset(
+            x = position.x + estimatedWidth / 2f,
+            y = position.y + estimatedHeight / 2f
+        )
+    }
+
+    private fun isPointInPolygon(point: Offset, polygon: List<Offset>): Boolean {
+        var inside = false
+        val n = polygon.size - 1
+        var j = n - 1
+        for (i in 0 until n) {
+            val xi = polygon[i].x
+            val yi = polygon[i].y
+            val xj = polygon[j].x
+            val yj = polygon[j].y
+            val intersect = ((yi > point.y) != (yj > point.y)) &&
+                (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi)
+            if (intersect) inside = !inside
+            j = i
+        }
+        return inside
+    }
+
+    private fun onResizeStart() {
+        val state = _state.value
+        val selectedItems = state.selectedItems
+        if (selectedItems.isEmpty()) return
+        val paths = state.paths
+        val shapes = state.shapeElements
+        val texts = state.textElements
+        val combinedBounds = combinedBoundsForSelection(paths, shapes, texts, selectedItems)
+            ?: return
+        resizeSnapshot = ResizeSnapshot(
+            paths = paths,
+            shapes = shapes,
+            texts = texts,
+            selectedItems = selectedItems,
+            selectionCenter = Offset(combinedBounds.center.x, combinedBounds.center.y)
+        )
+    }
+
+    private fun onScaleSelectedItem(scaleX: Float, scaleY: Float) {
+        val snap = resizeSnapshot ?: return
+        val scale = ((scaleX + scaleY) / 2f).coerceIn(0.2f, 5f)
+        val cx = snap.selectionCenter.x
+        val cy = snap.selectionCenter.y
+
+        var newPaths = snap.paths
+        var newShapes = snap.shapes
+        var newTexts = snap.texts
+
+        snap.selectedItems.forEach { selected ->
+            when (selected) {
+                is SelectedItem.PathItem -> {
+                    val path = newPaths.find { it.id == selected.id } ?: return@forEach
+                    val pathBounds = pathBounds(path)
+                    val centerX = (pathBounds.left + pathBounds.right) / 2f
+                    val centerY = (pathBounds.top + pathBounds.bottom) / 2f
+                    val newCenterX = cx + (centerX - cx) * scale
+                    val newCenterY = cy + (centerY - cy) * scale
+                    val updatedPath = path.copy(
+                        path = path.path.map { p ->
+                            Offset(
+                                newCenterX + (p.x - centerX) * scale,
+                                newCenterY + (p.y - centerY) * scale
+                            )
+                        },
+                        strokeWidth = path.strokeWidth * scale
+                    )
+                    newPaths = newPaths.map { if (it.id == path.id) updatedPath else it }
+                }
+                is SelectedItem.ShapeItem -> {
+                    val shape = newShapes.find { it.id == selected.id } ?: return@forEach
+                    val left = shape.topLeft.x
+                    val top = shape.topLeft.y
+                    val right = left + shape.size.width
+                    val bottom = top + shape.size.height
+                    val centerX = (left + right) / 2f
+                    val centerY = (top + bottom) / 2f
+                    val newCenterX = cx + (centerX - cx) * scale
+                    val newCenterY = cy + (centerY - cy) * scale
+                    val updatedShape = shape.copy(
+                        startPosition = Offset(
+                            newCenterX + (shape.startPosition.x - centerX) * scale,
+                            newCenterY + (shape.startPosition.y - centerY) * scale
+                        ),
+                        endPosition = Offset(
+                            newCenterX + (shape.endPosition.x - centerX) * scale,
+                            newCenterY + (shape.endPosition.y - centerY) * scale
+                        ),
+                        strokeWidth = shape.strokeWidth * scale
+                    )
+                    newShapes = newShapes.map { if (it.id == shape.id) updatedShape else it }
+                }
+                is SelectedItem.TextItem -> {
+                    val text = newTexts.find { it.id == selected.id } ?: return@forEach
+                    val (_, size) = textBounds(text)
+                    val w = size.width
+                    val h = size.height
+                    val centerX = text.position.x + w / 2f
+                    val centerY = text.position.y + h / 2f
+                    val newCenterX = cx + (centerX - cx) * scale
+                    val newCenterY = cy + (centerY - cy) * scale
+                    val newW = w * scale
+                    val newH = h * scale
+                    val updatedText = text.copy(
+                        position = Offset(newCenterX - newW / 2f, newCenterY - newH / 2f),
+                        fontSize = text.fontSize * scale
+                    )
+                    newTexts = newTexts.map { if (it.id == text.id) updatedText else it }
+                }
+            }
+        }
+
+        _state.update {
+            it.copy(paths = newPaths, shapeElements = newShapes, textElements = newTexts)
+        }
+    }
+
+    private fun onResizeEnd() {
+        resizeSnapshot = null
+        val boardId = currentBoardId ?: return
+        val state = _state.value
+        viewModelScope.launch {
+            state.paths.forEach { boardRepository.updatePath(it, boardId) }
+            state.shapeElements.forEach { boardRepository.updateShape(it, boardId) }
+            state.textElements.forEach { boardRepository.updateText(it, boardId) }
+            boardRepository.updateBoardTimestamp(boardId)
+        }
+    }
+
+    private fun pathBounds(path: PathData): Rect {
+        if (path.path.isEmpty()) return Rect.Zero
+        var minX = Float.MAX_VALUE
+        var minY = Float.MAX_VALUE
+        var maxX = Float.MIN_VALUE
+        var maxY = Float.MIN_VALUE
+        path.path.forEach { p ->
+            minX = minOf(minX, p.x)
+            minY = minOf(minY, p.y)
+            maxX = maxOf(maxX, p.x)
+            maxY = maxOf(maxY, p.y)
+        }
+        val pad = path.strokeWidth / 2f
+        return Rect(minX - pad, minY - pad, maxX + pad, maxY + pad)
+    }
+
+    private fun textBounds(text: TextData): Pair<Offset, Size> {
+        val w = (text.text.length * text.fontSize * 0.65f).coerceAtLeast(text.fontSize * 0.5f)
+        val h = text.fontSize * 1.4f
+        return text.position to Size(w, h)
+    }
+
+    private fun combinedBoundsForSelection(
+        paths: List<PathData>,
+        shapes: List<ShapeData>,
+        texts: List<TextData>,
+        selectedItems: List<SelectedItem>
+    ): Rect? {
+        var result: Rect? = null
+        selectedItems.forEach { selected ->
+            val r = when (selected) {
+                is SelectedItem.PathItem -> paths.find { it.id == selected.id }?.let { pathBounds(it) }
+                is SelectedItem.ShapeItem -> {
+                    shapes.find { it.id == selected.id }?.let { s ->
+                        Rect(s.topLeft.x, s.topLeft.y, s.topLeft.x + s.size.width, s.topLeft.y + s.size.height)
+                    }
+                }
+                is SelectedItem.TextItem -> {
+                    texts.find { it.id == selected.id }?.let { t ->
+                        val (pos, size) = textBounds(t)
+                        Rect(pos.x, pos.y, pos.x + size.width, pos.y + size.height)
+                    }
+                }
+            }
+            if (r != null) result = result?.expand(r) ?: r
+        }
+        return result
+    }
+
+    private fun Rect.expand(other: Rect): Rect = Rect(
+        left = minOf(left, other.left),
+        top = minOf(top, other.top),
+        right = maxOf(right, other.right),
+        bottom = maxOf(bottom, other.bottom)
+    )
+
+    private fun onDeleteSelectedItem() {
+        val selectedItems = _state.value.selectedItems
+        if (selectedItems.isEmpty()) return
+        val boardId = currentBoardId ?: return
+        val pathIds = selectedItems.filterIsInstance<SelectedItem.PathItem>().map { it.id }
+        val shapeIds = selectedItems.filterIsInstance<SelectedItem.ShapeItem>().map { it.id }
+        val textIds = selectedItems.filterIsInstance<SelectedItem.TextItem>().map { it.id }
+        _state.update {
+            it.copy(
+                paths = it.paths.filter { p -> p.id !in pathIds },
+                shapeElements = it.shapeElements.filter { s -> s.id !in shapeIds },
+                textElements = it.textElements.filter { t -> t.id !in textIds },
+                selectedItems = emptyList()
+            )
+        }
+        viewModelScope.launch {
+            pathIds.forEach { boardRepository.deletePath(it) }
+            shapeIds.forEach { boardRepository.deleteShape(it) }
+            textIds.forEach { boardRepository.deleteText(it) }
+            boardRepository.updateBoardTimestamp(boardId)
+        }
+    }
+
     private fun onZoomPanChange(scale: Float, panOffset: Offset) {
         val boardId = currentBoardId ?: return
         
@@ -405,4 +767,21 @@ sealed interface DrawingAction {
     
     // Zoom/Pan actions
     data class OnZoomPanChange(val scale: Float, val panOffset: Offset) : DrawingAction
+
+    // Selection actions
+    data class OnSelectItem(val item: SelectedItem) : DrawingAction
+    data object OnDeselect : DrawingAction
+    data class OnMoveSelectedItem(val deltaX: Float, val deltaY: Float) : DrawingAction
+    data object OnDeleteSelectedItem : DrawingAction
+
+    // Resize handles: scale selected items by dragging dots around selection
+    data object OnResizeStart : DrawingAction
+    data class OnScaleSelectedItem(val scaleX: Float, val scaleY: Float) : DrawingAction
+    data object OnResizeEnd : DrawingAction
+
+    // Lasso tool (multiple path selection)
+    data object OnLassoModeChange : DrawingAction
+    data class OnLassoStart(val offset: Offset) : DrawingAction
+    data class OnLassoAddPoint(val offset: Offset) : DrawingAction
+    data object OnLassoEnd : DrawingAction
 }

@@ -45,18 +45,24 @@ interface BoardRepository {
     fun getPathsByBoardId(boardId: Long): Flow<List<PathData>>
     suspend fun insertPath(path: PathData, boardId: Long)
     suspend fun insertPaths(paths: List<PathData>, boardId: Long)
+    suspend fun updatePath(path: PathData, boardId: Long)
+    suspend fun deletePath(pathId: String)
     suspend fun deletePathsByBoardId(boardId: Long)
 
     // Text operations
     fun getTextsByBoardId(boardId: Long): Flow<List<TextData>>
     suspend fun insertText(text: TextData, boardId: Long)
     suspend fun insertTexts(texts: List<TextData>, boardId: Long)
+    suspend fun updateText(text: TextData, boardId: Long)
+    suspend fun deleteText(textId: String)
     suspend fun deleteTextsByBoardId(boardId: Long)
 
     // Shape operations
     fun getShapesByBoardId(boardId: Long): Flow<List<ShapeData>>
     suspend fun insertShape(shape: ShapeData, boardId: Long)
     suspend fun insertShapes(shapes: List<ShapeData>, boardId: Long)
+    suspend fun updateShape(shape: ShapeData, boardId: Long)
+    suspend fun deleteShape(shapeId: String)
     suspend fun deleteShapesByBoardId(boardId: Long)
 
     // Load complete board data

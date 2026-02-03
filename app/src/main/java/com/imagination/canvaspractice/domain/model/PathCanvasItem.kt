@@ -2,7 +2,10 @@ package com.imagination.canvaspractice.domain.model
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -18,6 +21,10 @@ import kotlin.math.min
 class PathCanvasItem(
     private var pathData: PathData
 ) : CanvasItem {
+
+    override fun getId(): String = pathData.id
+
+    override fun getItemType(): SelectedItem = SelectedItem.PathItem(pathData.id)
 
     override fun draw(scope: DrawScope, textMeasurer: TextMeasurer) {
         if (pathData.path.isEmpty()) return
@@ -56,23 +63,26 @@ class PathCanvasItem(
         )
     }
 
-    override fun drawSelection(scope: DrawScope) {
+    override fun drawSelection(scope: DrawScope, selectionColor: Color, textMeasurer: TextMeasurer?) {
         val bounds = getBounds()
-        // Draw selection rectangle around the path
+        val pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 4f), 0f)
         scope.drawRect(
-            color = pathData.color.copy(alpha = 0.3f),
+            color = selectionColor,
             topLeft = Offset(bounds.left, bounds.top),
-            size = androidx.compose.ui.geometry.Size(bounds.width, bounds.height)
+            size = Size(bounds.width, bounds.height),
+            style = Stroke(width = 2f, pathEffect = pathEffect)
         )
     }
 
-    override fun containsPoint(x: Float, y: Float): Boolean {
+    override fun containsPoint(x: Float, y: Float, textMeasurer: TextMeasurer?): Boolean {
         if (pathData.path.isEmpty()) return false
-        
-        // Check if point is near any segment of the path
-        // Using a threshold based on stroke width
-        val threshold = pathData.strokeWidth / 2f + 5f
-        
+        // Quick reject: point must be within path bounds + padding
+        val bounds = getBounds()
+        val hitPadding = 24f
+        if (x < bounds.left - hitPadding || x > bounds.right + hitPadding ||
+            y < bounds.top - hitPadding || y > bounds.bottom + hitPadding) return false
+        // Check if point is near any segment of the path (generous threshold for touch)
+        val threshold = pathData.strokeWidth / 2f + 24f
         for (i in 0 until pathData.path.size - 1) {
             val p1 = pathData.path[i]
             val p2 = pathData.path[i + 1]

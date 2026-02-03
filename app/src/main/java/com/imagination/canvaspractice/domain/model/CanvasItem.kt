@@ -1,6 +1,7 @@
 package com.imagination.canvaspractice.domain.model
 
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.TextMeasurer
 
@@ -15,6 +16,16 @@ import androidx.compose.ui.text.TextMeasurer
  */
 interface CanvasItem {
     /**
+     * Returns the unique identifier of this item
+     */
+    fun getId(): String
+
+    /**
+     * Returns the type of this item (for selection mapping)
+     */
+    fun getItemType(): SelectedItem
+
+    /**
      * Draws the item on the canvas
      * @param scope The drawing scope to draw on
      * @param textMeasurer Text measurer for text-related items
@@ -22,18 +33,21 @@ interface CanvasItem {
     fun draw(scope: DrawScope, textMeasurer: TextMeasurer)
 
     /**
-     * Draws selection indicators around the item
+     * Draws selection indicators around the item (Figma-style dashed border)
      * @param scope The drawing scope to draw on
+     * @param selectionColor Color for the selection border
+     * @param textMeasurer Optional text measurer for accurate text bounds (used by text items)
      */
-    fun drawSelection(scope: DrawScope)
+    fun drawSelection(scope: DrawScope, selectionColor: Color, textMeasurer: TextMeasurer? = null)
 
     /**
      * Checks if a point is contained within this item
      * @param x X coordinate of the point
      * @param y Y coordinate of the point
+     * @param textMeasurer Optional text measurer for accurate text bounds (used by text items)
      * @return true if the point is within the item's bounds
      */
-    fun containsPoint(x: Float, y: Float): Boolean
+    fun containsPoint(x: Float, y: Float, textMeasurer: TextMeasurer? = null): Boolean
 
     /**
      * Translates (moves) the item by the given delta
