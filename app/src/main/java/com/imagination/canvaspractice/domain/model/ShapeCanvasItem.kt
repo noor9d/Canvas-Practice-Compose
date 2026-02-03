@@ -3,7 +3,9 @@ package com.imagination.canvaspractice.domain.model
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -19,6 +21,10 @@ import kotlin.math.min
 class ShapeCanvasItem(
     private var shapeData: ShapeData
 ) : CanvasItem {
+
+    override fun getId(): String = shapeData.id
+
+    override fun getItemType(): SelectedItem = SelectedItem.ShapeItem(shapeData.id)
 
     override fun draw(scope: DrawScope, textMeasurer: TextMeasurer) {
         val topLeft = shapeData.topLeft
@@ -93,17 +99,18 @@ class ShapeCanvasItem(
         }
     }
 
-    override fun drawSelection(scope: DrawScope) {
+    override fun drawSelection(scope: DrawScope, selectionColor: Color, textMeasurer: TextMeasurer?) {
         val bounds = getBounds()
-        // Draw selection rectangle around the shape
+        val pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 4f), 0f)
         scope.drawRect(
-            color = shapeData.color.copy(alpha = 0.3f),
+            color = selectionColor,
             topLeft = Offset(bounds.left, bounds.top),
-            size = Size(bounds.width, bounds.height)
+            size = Size(bounds.width, bounds.height),
+            style = Stroke(width = 2f, pathEffect = pathEffect)
         )
     }
 
-    override fun containsPoint(x: Float, y: Float): Boolean {
+    override fun containsPoint(x: Float, y: Float, textMeasurer: TextMeasurer?): Boolean {
         val bounds = getBounds()
         
         return when (shapeData.type) {
@@ -124,7 +131,7 @@ class ShapeCanvasItem(
             }
             
             ShapeType.LINE -> {
-                val threshold = shapeData.strokeWidth / 2f + 5f
+                val threshold = shapeData.strokeWidth / 2f + 24f
                 val distance = distanceToLineSegment(
                     x, y,
                     shapeData.startPosition.x, shapeData.startPosition.y,

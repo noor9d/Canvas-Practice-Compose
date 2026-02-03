@@ -3,6 +3,7 @@ package com.imagination.canvaspractice.domain.model
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import com.imagination.canvaspractice.domain.constants.DrawingConstants
+import com.imagination.canvaspractice.domain.model.SelectedItem
 import com.imagination.canvaspractice.presentation.dashboard.model.Board
 
 /**
@@ -45,5 +46,8 @@ data class DrawingState(
     
     // Zoom/Pan state (persisted to database)
     val scale: Float = 1f,
-    val panOffset: Offset = Offset.Zero
+    val panOffset: Offset = Offset.Zero,
+
+    // Selection state
+    val selectedItem: SelectedItem? = null
 )

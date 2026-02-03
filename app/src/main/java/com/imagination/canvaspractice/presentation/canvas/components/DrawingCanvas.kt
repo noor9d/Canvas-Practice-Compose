@@ -33,6 +33,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -44,12 +47,15 @@ import com.imagination.canvaspractice.domain.constants.DrawingConstants.GRID_COL
 import com.imagination.canvaspractice.domain.constants.DrawingConstants.GRID_SIZE
 import com.imagination.canvaspractice.domain.constants.DrawingConstants.MAX_SCALE
 import com.imagination.canvaspractice.domain.constants.DrawingConstants.MIN_SCALE
+import com.imagination.canvaspractice.domain.model.CanvasItem
 import com.imagination.canvaspractice.domain.model.CanvasItemFactory
 import com.imagination.canvaspractice.domain.model.DrawingMode
+import com.imagination.canvaspractice.domain.model.SelectedItem
 import com.imagination.canvaspractice.domain.model.PathCanvasItem
 import com.imagination.canvaspractice.domain.model.PathData
 import com.imagination.canvaspractice.domain.model.ShapeCanvasItem
 import com.imagination.canvaspractice.domain.model.ShapeData
+import com.imagination.canvaspractice.domain.model.TextCanvasItem
 import com.imagination.canvaspractice.domain.model.TextData
 import com.imagination.canvaspractice.presentation.canvas.DrawingAction
 import com.imagination.canvaspractice.ui.theme.CanvasPracticeTheme
@@ -85,6 +91,7 @@ fun DrawingCanvas(
     shapeElements: List<ShapeData>,
     currentShape: ShapeData?,
     drawingMode: DrawingMode?,
+    selectedItem: SelectedItem? = null,
     textInputPosition: Offset?,
     textInput: String,
     selectedColor: Color,
@@ -195,12 +202,19 @@ fun DrawingCanvas(
         }
     }
 
+    // Ref to current canvas items so pointerInput can read fresh data without paths/shapes/texts in keys
+    // (having them in keys cancels the gesture on every move, causing jerky drag)
+    val canvasItemsRef = remember { mutableStateOf<List<CanvasItem>>(emptyList()) }
+    LaunchedEffect(paths, shapeElements, textElements) {
+        canvasItemsRef.value = CanvasItemFactory.createItems(paths, shapeElements, textElements)
+    }
+
     Box(modifier = modifier.clipToBounds()) {
         // Drawing gestures must be OUTSIDE the transformed Box to receive screen coordinates
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(drawingMode, scale, offset) {
+                .pointerInput(drawingMode, scale, offset, selectedItem) {
                     // Handle drawing gestures (receive screen coordinates, convert to canvas)
                     when (drawingMode) {
                         DrawingMode.PEN -> {
@@ -250,14 +264,62 @@ fun DrawingCanvas(
                         }
 
                         null -> {
-                            // No gestures when no mode is selected
+                            val canvasItems = canvasItemsRef.value
+                            when {
+                                // Selection mode: item selected — drag moves item, canvas does not pan
+                                selectedItem != null -> {
+                                    awaitEachGesture {
+                                        val down = awaitFirstDown(requireUnconsumed = false)
+                                        val canvasOffset = (down.position - offset) / scale
+                                        val hitItem = canvasItems.lastOrNull { it.containsPoint(canvasOffset.x, canvasOffset.y, textMeasurer) }
+                                        val selectedCanvasItem = canvasItems.find { it.getItemType() == selectedItem }
+                                        val tapInsideSelection = selectedCanvasItem?.let { sel ->
+                                            val bounds = (sel as? TextCanvasItem)?.getBounds(textMeasurer) ?: sel.getBounds()
+                                            val padding = 8f / scale
+                                            bounds.inflate(padding).contains(canvasOffset)
+                                        } ?: false
+                                        if (tapInsideSelection) {
+                                            // Tap on selected item: keep selection, enter move loop
+                                        } else if (hitItem != null) {
+                                            onAction(DrawingAction.OnSelectItem(hitItem.getItemType()))
+                                        } else {
+                                            onAction(DrawingAction.OnDeselect)
+                                            return@awaitEachGesture
+                                        }
+                                        var lastPosition = down.position
+                                        while (true) {
+                                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                                            if (event.changes.all { !it.pressed }) break
+                                            val currentPosition = event.changes.first().position
+                                            val deltaScreen = currentPosition - lastPosition
+                                            lastPosition = currentPosition
+                                            if (deltaScreen.x != 0f || deltaScreen.y != 0f) {
+                                                onAction(DrawingAction.OnMoveSelectedItem(deltaScreen.x / scale, deltaScreen.y / scale))
+                                            }
+                                        }
+                                    }
+                                }
+                                // No selection: tap to select/deselect only; transform handles pan/zoom
+                                else -> {
+                                    detectTapGestures(
+                                        onTap = { screenOffset ->
+                                            val canvasOffset = (screenOffset - offset) / scale
+                                            val hitItem = canvasItems.lastOrNull { it.containsPoint(canvasOffset.x, canvasOffset.y, textMeasurer) }
+                                            if (hitItem != null) {
+                                                onAction(DrawingAction.OnSelectItem(hitItem.getItemType()))
+                                            } else {
+                                                onAction(DrawingAction.OnDeselect)
+                                            }
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
-                .pointerInput(drawingMode) {
-                    // Handle zoom/pan gestures ONLY when no drawing mode is active
-                    // This prevents conflicts between drawing and panning gestures
-                    if (drawingMode == null) {
+                .pointerInput(drawingMode, selectedItem) {
+                    // Pan/zoom ONLY when no drawing mode AND no selection (selection mode = move item, not canvas)
+                    if (drawingMode == null && selectedItem == null) {
                         detectTransformGestures { centroid, pan, zoom, _ ->
                             val (newOffset, newScale) = zoomingItemOrCanvas(
                                 pan = pan,
@@ -295,6 +357,7 @@ fun DrawingCanvas(
             val canvasItems = remember(paths, shapeElements, textElements) {
                 CanvasItemFactory.createItems(paths, shapeElements, textElements)
             }
+            val selectionColor = CanvasPracticeTheme.colorScheme.primary
 
             Canvas(
                 modifier = Modifier.fillMaxSize()
@@ -312,6 +375,14 @@ fun DrawingCanvas(
                     if (item.isVisible(viewport)) {
                         item.draw(this, textMeasurer)
                     }
+                }
+
+                // Draw selection (Figma-style dashed border) for selected item
+                selectedItem?.let { selected ->
+                    canvasItems
+                        .find { it.getItemType() == selected }
+                        ?.takeIf { it.isVisible(viewport) }
+                        ?.drawSelection(this, selectionColor, textMeasurer)
                 }
 
                 // Draw current path being drawn (if any)

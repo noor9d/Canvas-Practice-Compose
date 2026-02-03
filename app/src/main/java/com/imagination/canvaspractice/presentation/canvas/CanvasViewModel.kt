@@ -7,6 +7,7 @@ import com.imagination.canvaspractice.core.base.BaseViewModel
 import com.imagination.canvaspractice.data.mapper.BoardMapper.toDomain
 import com.imagination.canvaspractice.domain.constants.DrawingConstants
 import com.imagination.canvaspractice.domain.model.DrawingMode
+import com.imagination.canvaspractice.domain.model.SelectedItem
 import com.imagination.canvaspractice.domain.model.DrawingState
 import com.imagination.canvaspractice.domain.model.PathData
 import com.imagination.canvaspractice.domain.model.ShapeData
@@ -64,6 +65,9 @@ class CanvasViewModel @Inject constructor(
             is DrawingAction.OnShapeUpdate -> onShapeUpdate(action.offset)
             DrawingAction.OnShapeEnd -> onShapeEnd()
             is DrawingAction.OnZoomPanChange -> onZoomPanChange(action.scale, action.panOffset)
+            is DrawingAction.OnSelectItem -> onSelectItem(action.item)
+            DrawingAction.OnDeselect -> onDeselect()
+            is DrawingAction.OnMoveSelectedItem -> onMoveSelectedItem(action.deltaX, action.deltaY)
         }
     }
 
@@ -71,6 +75,7 @@ class CanvasViewModel @Inject constructor(
         _state.update {
             it.copy(
                 drawingMode = mode,
+                selectedItem = null, // Clear selection when switching to drawing mode
                 textInputPosition = null,
                 currentTextInput = "",
                 isColorPickerVisible = false // Hide color picker when switching modes
@@ -84,7 +89,8 @@ class CanvasViewModel @Inject constructor(
                 drawingMode = null,
                 textInputPosition = null,
                 currentTextInput = "",
-                isColorPickerVisible = false // Hide color picker when closing tool options
+                isColorPickerVisible = false, // Hide color picker when closing tool options
+                // Keep selection when closing options - user returns to selection/move mode
             )
         }
     }
@@ -319,6 +325,67 @@ class CanvasViewModel @Inject constructor(
         }
     }
 
+    private fun onSelectItem(item: SelectedItem) {
+        _state.update { it.copy(selectedItem = item) }
+    }
+
+    private fun onDeselect() {
+        _state.update { it.copy(selectedItem = null) }
+    }
+
+    private fun onMoveSelectedItem(deltaX: Float, deltaY: Float) {
+        val selected = _state.value.selectedItem ?: return
+        val boardId = currentBoardId ?: return
+
+        when (selected) {
+            is SelectedItem.PathItem -> {
+                val path = _state.value.paths.find { it.id == selected.id } ?: return
+                val updatedPath = path.copy(
+                    path = path.path.map { p ->
+                        Offset(p.x + deltaX, p.y + deltaY)
+                    }
+                )
+                _state.update {
+                    it.copy(paths = it.paths.map { p ->
+                        if (p.id == selected.id) updatedPath else p
+                    })
+                }
+                viewModelScope.launch {
+                    boardRepository.updatePath(updatedPath, boardId)
+                }
+            }
+            is SelectedItem.ShapeItem -> {
+                val shape = _state.value.shapeElements.find { it.id == selected.id } ?: return
+                val updatedShape = shape.copy(
+                    startPosition = Offset(shape.startPosition.x + deltaX, shape.startPosition.y + deltaY),
+                    endPosition = Offset(shape.endPosition.x + deltaX, shape.endPosition.y + deltaY)
+                )
+                _state.update {
+                    it.copy(shapeElements = it.shapeElements.map { s ->
+                        if (s.id == selected.id) updatedShape else s
+                    })
+                }
+                viewModelScope.launch {
+                    boardRepository.updateShape(updatedShape, boardId)
+                }
+            }
+            is SelectedItem.TextItem -> {
+                val text = _state.value.textElements.find { it.id == selected.id } ?: return
+                val updatedText = text.copy(
+                    position = Offset(text.position.x + deltaX, text.position.y + deltaY)
+                )
+                _state.update {
+                    it.copy(textElements = it.textElements.map { t ->
+                        if (t.id == selected.id) updatedText else t
+                    })
+                }
+                viewModelScope.launch {
+                    boardRepository.updateText(updatedText, boardId)
+                }
+            }
+        }
+    }
+
     private fun onZoomPanChange(scale: Float, panOffset: Offset) {
         val boardId = currentBoardId ?: return
         
@@ -405,4 +472,9 @@ sealed interface DrawingAction {
     
     // Zoom/Pan actions
     data class OnZoomPanChange(val scale: Float, val panOffset: Offset) : DrawingAction
+
+    // Selection actions
+    data class OnSelectItem(val item: SelectedItem) : DrawingAction
+    data object OnDeselect : DrawingAction
+    data class OnMoveSelectedItem(val deltaX: Float, val deltaY: Float) : DrawingAction
 }
