@@ -64,6 +64,96 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.pow
 import kotlin.math.sqrt
+import kotlin.math.min
+import kotlin.math.max
+
+private enum class ResizeHandle {
+    TopLeft, TopCenter, TopRight, MiddleRight, BottomRight, BottomCenter, BottomLeft, MiddleLeft
+}
+
+private fun ResizeHandle.position(bounds: Rect): Offset = when (this) {
+    ResizeHandle.TopLeft -> Offset(bounds.left, bounds.top)
+    ResizeHandle.TopCenter -> Offset(bounds.center.x, bounds.top)
+    ResizeHandle.TopRight -> Offset(bounds.right, bounds.top)
+    ResizeHandle.MiddleRight -> Offset(bounds.right, bounds.center.y)
+    ResizeHandle.BottomRight -> Offset(bounds.right, bounds.bottom)
+    ResizeHandle.BottomCenter -> Offset(bounds.center.x, bounds.bottom)
+    ResizeHandle.BottomLeft -> Offset(bounds.left, bounds.bottom)
+    ResizeHandle.MiddleLeft -> Offset(bounds.left, bounds.center.y)
+}
+
+/** Extra space between selection box and resize handles to avoid conflict with move gesture. */
+private const val RESIZE_HANDLE_BOX_PADDING = 24f
+/** Touch target for resize handles; must be larger than dot so resize always wins over move. */
+private const val RESIZE_HANDLE_HIT_RADIUS = 40f
+/** Visible radius of each resize handle dot. */
+private const val RESIZE_HANDLE_DOT_RADIUS = 16f
+/** Thickness of the primary-colored ring (border) around each dot. */
+private const val RESIZE_HANDLE_DOT_BORDER_THICKNESS = 3f
+
+private fun hitTestResizeHandle(bounds: Rect, point: Offset): ResizeHandle? =
+    ResizeHandle.entries.firstOrNull { handle ->
+        val pos = handle.position(bounds)
+        (point.x - pos.x) * (point.x - pos.x) + (point.y - pos.y) * (point.y - pos.y) <= RESIZE_HANDLE_HIT_RADIUS * RESIZE_HANDLE_HIT_RADIUS
+    }
+
+private fun computeScaleFromHandle(
+    handle: ResizeHandle,
+    initialBounds: Rect,
+    newHandlePosition: Offset
+): Pair<Float, Float> {
+    val l = initialBounds.left
+    val t = initialBounds.top
+    val r = initialBounds.right
+    val b = initialBounds.bottom
+    val w = (r - l).coerceAtLeast(1f)
+    val h = (b - t).coerceAtLeast(1f)
+    return when (handle) {
+        ResizeHandle.BottomRight -> {
+            val newW = (newHandlePosition.x - l).coerceAtLeast(4f)
+            val newH = (newHandlePosition.y - t).coerceAtLeast(4f)
+            Pair(newW / w, newH / h)
+        }
+
+        ResizeHandle.BottomLeft -> {
+            val newW = (r - newHandlePosition.x).coerceAtLeast(4f)
+            val newH = (newHandlePosition.y - t).coerceAtLeast(4f)
+            Pair(newW / w, newH / h)
+        }
+
+        ResizeHandle.TopRight -> {
+            val newW = (newHandlePosition.x - l).coerceAtLeast(4f)
+            val newH = (b - newHandlePosition.y).coerceAtLeast(4f)
+            Pair(newW / w, newH / h)
+        }
+
+        ResizeHandle.TopLeft -> {
+            val newW = (r - newHandlePosition.x).coerceAtLeast(4f)
+            val newH = (b - newHandlePosition.y).coerceAtLeast(4f)
+            Pair(newW / w, newH / h)
+        }
+
+        ResizeHandle.TopCenter -> {
+            val newH = (b - newHandlePosition.y).coerceAtLeast(4f)
+            Pair(1f, newH / h)
+        }
+
+        ResizeHandle.BottomCenter -> {
+            val newH = (newHandlePosition.y - t).coerceAtLeast(4f)
+            Pair(1f, newH / h)
+        }
+
+        ResizeHandle.MiddleLeft -> {
+            val newW = (r - newHandlePosition.x).coerceAtLeast(4f)
+            Pair(newW / w, 1f)
+        }
+
+        ResizeHandle.MiddleRight -> {
+            val newW = (newHandlePosition.x - l).coerceAtLeast(4f)
+            Pair(newW / w, 1f)
+        }
+    }
+}
 
 /**
  * A composable canvas for drawing with touch gestures
@@ -219,22 +309,60 @@ fun DrawingCanvas(
                 .pointerInput(drawingMode, scale, offset, selectedItems, isLassoMode) {
                     val canvasItems = canvasItemsRef.value
                     when {
-                        // When anything is selected (single or lasso), tap outside deselects; tap on selection allows move
+                        // When anything is selected (single or lasso), tap outside deselects; tap on selection allows move or resize
                         selectedItems.isNotEmpty() -> {
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
                                 val canvasOffset = (down.position - offset) / scale
-                                val hitItem = canvasItems.lastOrNull { it.containsPoint(canvasOffset.x, canvasOffset.y, textMeasurer) }
-                                val tapInsideSelection = selectedItems.any { selected ->
-                                    val sel = canvasItems.find { it.getItemType() == selected }
-                                    sel?.let { s ->
-                                        val bounds = (s as? TextCanvasItem)?.getBounds(textMeasurer) ?: s.getBounds()
-                                        val padding = 8f / scale
-                                        bounds.inflate(padding).contains(canvasOffset)
-                                    } ?: false
+                                val combinedBounds = selectedItems.mapNotNull { selected ->
+                                    canvasItems.find { it.getItemType() == selected }
+                                        ?.let { s ->
+                                            (s as? TextCanvasItem)?.getBounds(textMeasurer)
+                                                ?: s.getBounds()
+                                        }
+                                }.fold<Rect?, Rect?>(null) { acc, r ->
+                                    r?.let {
+                                        if (acc == null) r else Rect(
+                                            min(acc.left, r.left), min(acc.top, r.top),
+                                            max(acc.right, r.right), max(acc.bottom, r.bottom)
+                                        )
+                                    }
                                 }
-                                if (tapInsideSelection) {
-                                    // Tap on selected: keep selection, enter move loop
+                                val box = combinedBounds?.inflate(RESIZE_HANDLE_BOX_PADDING)
+                                val hitHandle = box?.let { hitTestResizeHandle(it, canvasOffset) }
+                                if (hitHandle != null && box != null) {
+                                    onAction(DrawingAction.OnResizeStart)
+                                    while (true) {
+                                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                                        if (event.changes.all { !it.pressed }) {
+                                            onAction(DrawingAction.OnResizeEnd)
+                                            break
+                                        }
+                                        val currentPosition = event.changes.first().position
+                                        val currentCanvas = (currentPosition - offset) / scale
+                                        val (scaleX, scaleY) = computeScaleFromHandle(
+                                            handle = hitHandle,
+                                            initialBounds = box,
+                                            newHandlePosition = currentCanvas
+                                        )
+                                        onAction(DrawingAction.OnScaleSelectedItem(scaleX, scaleY))
+                                    }
+                                    return@awaitEachGesture
+                                }
+                                // Move only when drag starts inside the selection box and NOT in handle zone (dots)
+                                val inHandleZone = box?.let { hitTestResizeHandle(it, canvasOffset) != null } == true
+                                val tapInsideSelectionBox = combinedBounds != null
+                                    && combinedBounds.contains(canvasOffset)
+                                    && !inHandleZone
+                                val hitItem = canvasItems.lastOrNull {
+                                    it.containsPoint(
+                                        canvasOffset.x,
+                                        canvasOffset.y,
+                                        textMeasurer
+                                    )
+                                }
+                                if (tapInsideSelectionBox) {
+                                    // Drag started inside selection box: enter move loop only
                                 } else if (hitItem != null) {
                                     onAction(DrawingAction.OnSelectItem(hitItem.getItemType()))
                                 } else {
@@ -249,7 +377,12 @@ fun DrawingCanvas(
                                     val deltaScreen = currentPosition - lastPosition
                                     lastPosition = currentPosition
                                     if (deltaScreen.x != 0f || deltaScreen.y != 0f) {
-                                        onAction(DrawingAction.OnMoveSelectedItem(deltaScreen.x / scale, deltaScreen.y / scale))
+                                        onAction(
+                                            DrawingAction.OnMoveSelectedItem(
+                                                deltaScreen.x / scale,
+                                                deltaScreen.y / scale
+                                            )
+                                        )
                                     }
                                 }
                             }
@@ -317,7 +450,13 @@ fun DrawingCanvas(
                             detectTapGestures(
                                 onTap = { screenOffset ->
                                     val canvasOffset = (screenOffset - offset) / scale
-                                    val hitItem = canvasItems.lastOrNull { it.containsPoint(canvasOffset.x, canvasOffset.y, textMeasurer) }
+                                    val hitItem = canvasItems.lastOrNull {
+                                        it.containsPoint(
+                                            canvasOffset.x,
+                                            canvasOffset.y,
+                                            textMeasurer
+                                        )
+                                    }
                                     if (hitItem != null) {
                                         onAction(DrawingAction.OnSelectItem(hitItem.getItemType()))
                                     } else {
@@ -387,12 +526,41 @@ fun DrawingCanvas(
                     }
                 }
 
-                // Draw selection for each selected item
+                // Draw selection for each selected item and compute combined bounds for handles
+                var combinedSelectionBounds: Rect? = null
                 selectedItems.forEach { selected ->
-                    canvasItems
-                        .find { it.getItemType() == selected }
+                    val item = canvasItems.find { it.getItemType() == selected }
                         ?.takeIf { it.isVisible(viewport) }
-                        ?.drawSelection(this, selectionColor, textMeasurer)
+                    if (item != null) {
+                        item.drawSelection(this, selectionColor, textMeasurer)
+                        val bounds =
+                            (item as? TextCanvasItem)?.getBounds(textMeasurer) ?: item.getBounds()
+                        combinedSelectionBounds = if (combinedSelectionBounds == null) bounds
+                        else Rect(
+                            min(combinedSelectionBounds.left, bounds.left),
+                            min(combinedSelectionBounds.top, bounds.top),
+                            max(combinedSelectionBounds.right, bounds.right),
+                            max(combinedSelectionBounds.bottom, bounds.bottom)
+                        )
+                    }
+                }
+
+                // Draw resize handle dots outside the selection box (with padding to avoid move/resize conflict)
+                combinedSelectionBounds?.let { bounds ->
+                    val box = bounds.inflate(RESIZE_HANDLE_BOX_PADDING)
+                    ResizeHandle.entries.forEach { handle ->
+                        val pos = handle.position(box)
+                        drawCircle(
+                            color = selectionColor.copy(alpha = 0.5f),
+                            radius = RESIZE_HANDLE_DOT_RADIUS,
+                            center = pos
+                        )
+                        drawCircle(
+                            color = Color.White,
+                            radius = RESIZE_HANDLE_DOT_RADIUS - RESIZE_HANDLE_DOT_BORDER_THICKNESS,
+                            center = pos
+                        )
+                    }
                 }
 
                 // Draw lasso path while drawing
