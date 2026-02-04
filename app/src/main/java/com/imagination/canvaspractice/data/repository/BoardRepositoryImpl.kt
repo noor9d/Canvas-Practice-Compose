@@ -54,7 +54,8 @@ class BoardRepositoryImpl @Inject constructor(
             boardId = boardId,
             path = path.path,
             color = path.color,
-            strokeWidth = path.strokeWidth
+            strokeWidth = path.strokeWidth,
+            groupId = path.groupId
         )
         pathDao.insertPath(pathEntity)
         updateBoardTimestamp(boardId)
@@ -67,7 +68,8 @@ class BoardRepositoryImpl @Inject constructor(
                 boardId = boardId,
                 path = path.path,
                 color = path.color,
-                strokeWidth = path.strokeWidth
+                strokeWidth = path.strokeWidth,
+                groupId = path.groupId
             )
         }
         pathDao.insertPaths(pathEntities)
@@ -95,7 +97,8 @@ class BoardRepositoryImpl @Inject constructor(
             text = text.text,
             position = text.position,
             color = text.color,
-            fontSize = text.fontSize
+            fontSize = text.fontSize,
+            groupId = text.groupId
         )
         textDao.insertText(textEntity)
         updateBoardTimestamp(boardId)
@@ -109,7 +112,8 @@ class BoardRepositoryImpl @Inject constructor(
                 text = text.text,
                 position = text.position,
                 color = text.color,
-                fontSize = text.fontSize
+                fontSize = text.fontSize,
+                groupId = text.groupId
             )
         }
         textDao.insertTexts(textEntities)
@@ -139,7 +143,8 @@ class BoardRepositoryImpl @Inject constructor(
             endPosition = shape.endPosition,
             color = shape.color,
             strokeWidth = shape.strokeWidth,
-            isFilled = shape.isFilled
+            isFilled = shape.isFilled,
+            groupId = shape.groupId
         )
         shapeDao.insertShape(shapeEntity)
         updateBoardTimestamp(boardId)
@@ -155,7 +160,8 @@ class BoardRepositoryImpl @Inject constructor(
                 endPosition = shape.endPosition,
                 color = shape.color,
                 strokeWidth = shape.strokeWidth,
-                isFilled = shape.isFilled
+                isFilled = shape.isFilled,
+                groupId = shape.groupId
             )
         }
         shapeDao.insertShapes(shapeEntities)

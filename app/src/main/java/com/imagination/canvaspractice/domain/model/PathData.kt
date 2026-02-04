@@ -5,15 +5,13 @@ import androidx.compose.ui.graphics.Color
 
 /**
  * Represents a single drawing path with its properties
- * 
- * @param id Unique identifier for this path
- * @param color The color used to draw this path
- * @param strokeWidth The width of the stroke in pixels
- * @param path List of offset points that make up this path
+ *
+ * @param groupId Optional group id; items with the same non-null groupId are grouped
  */
 data class PathData(
     val id: String,
     val color: Color,
     val strokeWidth: Float,
-    val path: List<Offset>
+    val path: List<Offset>,
+    val groupId: String? = null
 )

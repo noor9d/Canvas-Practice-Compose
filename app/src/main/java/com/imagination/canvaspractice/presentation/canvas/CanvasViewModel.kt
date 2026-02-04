@@ -85,6 +85,8 @@ class CanvasViewModel @Inject constructor(
             is DrawingAction.OnLassoStart -> onLassoStart(action.offset)
             is DrawingAction.OnLassoAddPoint -> onLassoAddPoint(action.offset)
             DrawingAction.OnLassoEnd -> onLassoEnd()
+            DrawingAction.OnGroupItems -> onGroupItems()
+            DrawingAction.OnUngroupItems -> onUngroupItems()
             DrawingAction.OnResizeStart -> onResizeStart()
             is DrawingAction.OnScaleSelectedItem -> onScaleSelectedItem(action.scaleX, action.scaleY)
             DrawingAction.OnResizeEnd -> onResizeEnd()
@@ -120,7 +122,30 @@ class CanvasViewModel @Inject constructor(
     }
 
     private fun onFontSizeChange(fontSize: Float) {
-        _state.update { it.copy(selectedFontSize = fontSize) }
+        val selectedItems = _state.value.selectedItems
+        val textIds = selectedItems.filterIsInstance<SelectedItem.TextItem>().map { it.id }
+        _state.update { state ->
+            val newTexts = if (textIds.isEmpty()) {
+                state.textElements
+            } else {
+                state.textElements.map { text ->
+                    if (text.id in textIds) text.copy(fontSize = fontSize) else text
+                }
+            }
+            state.copy(
+                selectedFontSize = fontSize,
+                textElements = newTexts
+            )
+        }
+        if (textIds.isNotEmpty()) {
+            val boardId = currentBoardId ?: return
+            viewModelScope.launch {
+                _state.value.textElements.filter { it.id in textIds }.forEach {
+                    boardRepository.updateText(it, boardId)
+                }
+                boardRepository.updateBoardTimestamp(boardId)
+            }
+        }
     }
 
     private fun onShapeStart(offset: Offset, scale: Float) {
@@ -216,11 +241,36 @@ class CanvasViewModel @Inject constructor(
     }
 
     private fun onSelectColor(color: Color) {
-        _state.update {
-            it.copy(
+        val selectedItems = _state.value.selectedItems
+        val pathIds = selectedItems.filterIsInstance<SelectedItem.PathItem>().map { it.id }
+        val shapeIds = selectedItems.filterIsInstance<SelectedItem.ShapeItem>().map { it.id }
+        val textIds = selectedItems.filterIsInstance<SelectedItem.TextItem>().map { it.id }
+        _state.update { state ->
+            val newPaths = state.paths.map { if (it.id in pathIds) it.copy(color = color) else it }
+            val newShapes = state.shapeElements.map { if (it.id in shapeIds) it.copy(color = color) else it }
+            val newTexts = state.textElements.map { if (it.id in textIds) it.copy(color = color) else it }
+            state.copy(
                 selectedColor = color,
-                isColorPickerVisible = false // Close color picker when color is selected
+                isColorPickerVisible = false,
+                paths = newPaths,
+                shapeElements = newShapes,
+                textElements = newTexts
             )
+        }
+        if (pathIds.isNotEmpty() || shapeIds.isNotEmpty() || textIds.isNotEmpty()) {
+            val boardId = currentBoardId ?: return
+            viewModelScope.launch {
+                _state.value.paths.filter { it.id in pathIds }.forEach {
+                    boardRepository.updatePath(it, boardId)
+                }
+                _state.value.shapeElements.filter { it.id in shapeIds }.forEach {
+                    boardRepository.updateShape(it, boardId)
+                }
+                _state.value.textElements.filter { it.id in textIds }.forEach {
+                    boardRepository.updateText(it, boardId)
+                }
+                boardRepository.updateBoardTimestamp(boardId)
+            }
         }
     }
 
@@ -320,7 +370,8 @@ class CanvasViewModel @Inject constructor(
             
             // Load all drawing elements
             val (paths, texts, shapes) = boardRepository.loadBoardData(boardIdLong)
-            
+            val itemGroups = buildItemGroupsFromItems(paths, texts, shapes)
+
         _state.update {
             it.copy(
                 isLoading = false,
@@ -329,6 +380,7 @@ class CanvasViewModel @Inject constructor(
                 paths = paths,
                 textElements = texts,
                 shapeElements = shapes,
+                itemGroups = itemGroups,
                 textCreationScale = null, // Reset scale after text creation
                 scale = board.scale,
                 panOffset = board.panOffset
@@ -346,7 +398,34 @@ class CanvasViewModel @Inject constructor(
     }
 
     private fun onSelectItem(item: SelectedItem) {
-        _state.update { it.copy(selectedItems = listOf(item)) }
+        val state = _state.value
+        val groupId = state.itemGroups[item.id]
+        val itemsToSelect = if (groupId != null) {
+            // Select entire group: all items that share this groupId
+            state.itemGroups.filter { it.value == groupId }.keys.map { id ->
+                when {
+                    state.paths.any { it.id == id } -> SelectedItem.PathItem(id)
+                    state.shapeElements.any { it.id == id } -> SelectedItem.ShapeItem(id)
+                    state.textElements.any { it.id == id } -> SelectedItem.TextItem(id)
+                    else -> null
+                }
+            }.filterNotNull()
+        } else {
+            listOf(item)
+        }
+        if (itemsToSelect.isEmpty()) return
+        val firstItem = itemsToSelect.first()
+        val itemColor = when (firstItem) {
+            is SelectedItem.PathItem -> state.paths.find { it.id == firstItem.id }?.color
+            is SelectedItem.ShapeItem -> state.shapeElements.find { it.id == firstItem.id }?.color
+            is SelectedItem.TextItem -> state.textElements.find { it.id == firstItem.id }?.color
+        }
+        _state.update {
+            it.copy(
+                selectedItems = itemsToSelect,
+                selectedColor = itemColor ?: it.selectedColor
+            )
+        }
     }
 
     private fun onDeselect() {
@@ -451,8 +530,96 @@ class CanvasViewModel @Inject constructor(
             }
             .map { SelectedItem.TextItem(it.id) }
 
+        val selectedItems = pathItems + shapeItems + textItems
+        val firstColor = pathItems.firstOrNull()?.let { state.paths.find { p -> p.id == it.id }?.color }
+            ?: shapeItems.firstOrNull()?.let { state.shapeElements.find { s -> s.id == it.id }?.color }
+            ?: textItems.firstOrNull()?.let { state.textElements.find { t -> t.id == it.id }?.color }
         _state.update {
-            it.copy(selectedItems = pathItems + shapeItems + textItems)
+            it.copy(
+                selectedItems = selectedItems,
+                selectedColor = firstColor ?: it.selectedColor
+            )
+        }
+    }
+
+    private fun buildItemGroupsFromItems(
+        paths: List<PathData>,
+        texts: List<TextData>,
+        shapes: List<ShapeData>
+    ): Map<String, String> {
+        val map = mutableMapOf<String, String>()
+        paths.filter { it.groupId != null }.forEach { map[it.id] = it.groupId!! }
+        shapes.filter { it.groupId != null }.forEach { map[it.id] = it.groupId!! }
+        texts.filter { it.groupId != null }.forEach { map[it.id] = it.groupId!! }
+        return map
+    }
+
+    private fun onGroupItems() {
+        val state = _state.value
+        val selectedItems = state.selectedItems
+        if (selectedItems.size < 2) return
+        val boardId = currentBoardId ?: return
+        val selectedIds = selectedItems.map { it.id }.toSet()
+        val groupId = "group_${System.currentTimeMillis()}"
+
+        var newPaths = state.paths
+        var newShapes = state.shapeElements
+        var newTexts = state.textElements
+        selectedItems.forEach { selected ->
+            when (selected) {
+                is SelectedItem.PathItem -> {
+                    val path = newPaths.find { it.id == selected.id } ?: return@forEach
+                    newPaths = newPaths.map { if (it.id == selected.id) it.copy(groupId = groupId) else it }
+                }
+                is SelectedItem.ShapeItem -> {
+                    val shape = newShapes.find { it.id == selected.id } ?: return@forEach
+                    newShapes = newShapes.map { if (it.id == selected.id) it.copy(groupId = groupId) else it }
+                }
+                is SelectedItem.TextItem -> {
+                    val text = newTexts.find { it.id == selected.id } ?: return@forEach
+                    newTexts = newTexts.map { if (it.id == selected.id) it.copy(groupId = groupId) else it }
+                }
+            }
+        }
+        _state.update {
+            it.copy(
+                paths = newPaths,
+                shapeElements = newShapes,
+                textElements = newTexts,
+                itemGroups = it.itemGroups + selectedIds.associateWith { groupId }
+            )
+        }
+        viewModelScope.launch {
+            newPaths.filter { it.id in selectedIds }.forEach { boardRepository.updatePath(it, boardId) }
+            newShapes.filter { it.id in selectedIds }.forEach { boardRepository.updateShape(it, boardId) }
+            newTexts.filter { it.id in selectedIds }.forEach { boardRepository.updateText(it, boardId) }
+            boardRepository.updateBoardTimestamp(boardId)
+        }
+    }
+
+    private fun onUngroupItems() {
+        val state = _state.value
+        val selectedItems = state.selectedItems
+        if (selectedItems.isEmpty()) return
+        val boardId = currentBoardId ?: return
+        val selectedIds = selectedItems.map { it.id }.toSet()
+
+        val newPaths = state.paths.map { if (it.id in selectedIds) it.copy(groupId = null) else it }
+        val newShapes = state.shapeElements.map { if (it.id in selectedIds) it.copy(groupId = null) else it }
+        val newTexts = state.textElements.map { if (it.id in selectedIds) it.copy(groupId = null) else it }
+        _state.update {
+            it.copy(
+                paths = newPaths,
+                shapeElements = newShapes,
+                textElements = newTexts,
+                itemGroups = it.itemGroups - selectedIds
+            )
+        }
+        viewModelScope.launch {
+            newPaths.filter { it.id in selectedIds }.forEach { boardRepository.updatePath(it, boardId) }
+            newShapes.filter { it.id in selectedIds }.forEach { boardRepository.updateShape(it, boardId) }
+            newTexts.filter { it.id in selectedIds }.forEach { boardRepository.updateText(it, boardId) }
+            boardRepository.updateBoardTimestamp(boardId)
         }
     }
 
@@ -662,6 +829,7 @@ class CanvasViewModel @Inject constructor(
         val selectedItems = _state.value.selectedItems
         if (selectedItems.isEmpty()) return
         val boardId = currentBoardId ?: return
+        val deletedIds = selectedItems.map { it.id }.toSet()
         val pathIds = selectedItems.filterIsInstance<SelectedItem.PathItem>().map { it.id }
         val shapeIds = selectedItems.filterIsInstance<SelectedItem.ShapeItem>().map { it.id }
         val textIds = selectedItems.filterIsInstance<SelectedItem.TextItem>().map { it.id }
@@ -670,7 +838,8 @@ class CanvasViewModel @Inject constructor(
                 paths = it.paths.filter { p -> p.id !in pathIds },
                 shapeElements = it.shapeElements.filter { s -> s.id !in shapeIds },
                 textElements = it.textElements.filter { t -> t.id !in textIds },
-                selectedItems = emptyList()
+                selectedItems = emptyList(),
+                itemGroups = it.itemGroups - deletedIds
             )
         }
         viewModelScope.launch {
@@ -784,4 +953,8 @@ sealed interface DrawingAction {
     data class OnLassoStart(val offset: Offset) : DrawingAction
     data class OnLassoAddPoint(val offset: Offset) : DrawingAction
     data object OnLassoEnd : DrawingAction
+
+    // Group/Ungroup selected items
+    data object OnGroupItems : DrawingAction
+    data object OnUngroupItems : DrawingAction
 }

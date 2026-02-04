@@ -31,7 +31,8 @@ data class PathEntity(
     val boardId: Long,
     val color: Long, // Stored as Long, converted using ColorConverter
     val strokeWidth: Float,
-    val path: String // Stored as String, converted using OffsetListConverter
+    val path: String, // Stored as String, converted using OffsetListConverter
+    val groupId: String? = null
 ) {
     companion object {
         fun fromDomain(
@@ -39,7 +40,8 @@ data class PathEntity(
             boardId: Long,
             path: List<Offset>,
             color: Color,
-            strokeWidth: Float
+            strokeWidth: Float,
+            groupId: String? = null
         ): PathEntity {
             val colorConverter = ColorConverter()
             val offsetConverter = OffsetListConverter()
@@ -48,7 +50,8 @@ data class PathEntity(
                 boardId = boardId,
                 color = colorConverter.fromColor(color),
                 strokeWidth = strokeWidth,
-                path = offsetConverter.fromOffsetList(path)
+                path = offsetConverter.fromOffsetList(path),
+                groupId = groupId
             )
         }
 
@@ -59,7 +62,8 @@ data class PathEntity(
                 id = pathEntity.id,
                 color = colorConverter.toColor(pathEntity.color),
                 strokeWidth = pathEntity.strokeWidth,
-                path = offsetConverter.toOffsetList(pathEntity.path)
+                path = offsetConverter.toOffsetList(pathEntity.path),
+                groupId = pathEntity.groupId
             )
         }
     }

@@ -43,7 +43,11 @@ fun ShapeOptionsBar(
     onColorClick: () -> Unit,
     onSelectShapeType: (ShapeType) -> Unit,
     onClose: () -> Unit,
-    onDelete: (() -> Unit)? = null
+    onDelete: (() -> Unit)? = null,
+    showGroupButtons: Boolean = false,
+    isGrouped: Boolean = false,
+    onGroupClick: () -> Unit = {},
+    onUngroupClick: () -> Unit = {}
 ) {
     Row(
         modifier = modifier
@@ -71,6 +75,25 @@ fun ShapeOptionsBar(
                         contentDescription = "Delete",
                         colorFilter = ColorFilter.tint(CanvasPracticeTheme.colorScheme.onBackground)
                     )
+                }
+            }
+            if (showGroupButtons) {
+                if (isGrouped) {
+                    IconButton(onClick = onUngroupClick) {
+                        Image(
+                            painter = painterResource(R.drawable.ungroup_items_svgrepo_com),
+                            contentDescription = "Ungroup items",
+                            colorFilter = ColorFilter.tint(CanvasPracticeTheme.colorScheme.onBackground)
+                        )
+                    }
+                } else {
+                    IconButton(onClick = onGroupClick) {
+                        Image(
+                            painter = painterResource(R.drawable.group_items_svgrepo_com),
+                            contentDescription = "Group items",
+                            colorFilter = ColorFilter.tint(CanvasPracticeTheme.colorScheme.onBackground)
+                        )
+                    }
                 }
             }
         }
