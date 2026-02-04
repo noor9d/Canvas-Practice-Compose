@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.viewModelScope
 import com.imagination.canvaspractice.core.base.BaseViewModel
 import com.imagination.canvaspractice.data.mapper.BoardMapper.toDomain
@@ -73,6 +74,8 @@ class CanvasViewModel @Inject constructor(
             is DrawingAction.OnTextInputChange -> onTextInputChange(action.text)
             is DrawingAction.OnTextInputStart -> onTextInputStart(action.position, action.scale)
             DrawingAction.OnTextInputDone -> onTextInputDone()
+            is DrawingAction.OnCanvasSizeChange -> onCanvasSizeChange(action.size)
+            DrawingAction.OnEditSelectedText -> onEditSelectedText()
             is DrawingAction.OnShapeStart -> onShapeStart(action.offset, action.scale)
             is DrawingAction.OnShapeUpdate -> onShapeUpdate(action.offset)
             DrawingAction.OnShapeEnd -> onShapeEnd()
@@ -94,14 +97,33 @@ class CanvasViewModel @Inject constructor(
     }
 
     private fun onSelectMode(mode: DrawingMode) {
-        _state.update {
-            it.copy(
+        _state.update { state ->
+            var next = state.copy(
                 drawingMode = mode,
-                selectedItems = emptyList(), // Clear selection when switching to drawing mode
+                selectedItems = emptyList(),
                 textInputPosition = null,
                 currentTextInput = "",
-                isColorPickerVisible = false // Hide color picker when switching modes
+                editingTextId = null,
+                isColorPickerVisible = false
             )
+            // Start text input at viewport start (left) when entering TEXT mode so text flows right and stays visible
+            if (mode == DrawingMode.TEXT && state.canvasSize.width > 0 && state.canvasSize.height > 0) {
+                val viewportLeft = -state.panOffset.x / state.scale
+                val padding = 48f
+                val centerScreenY = state.canvasSize.height / 2f
+                val centerCanvasY = (centerScreenY - state.panOffset.y) / state.scale
+                val startPosition = Offset(viewportLeft + padding, centerCanvasY)
+                next = next.copy(
+                    textInputPosition = startPosition,
+                    currentTextInput = "",
+                    textCreationScale = state.scale
+                )
+            }
+            next
+        }
+        if (_state.value.textInputPosition != null) {
+            // Ensure scale is stored for text creation
+            _state.update { it.copy(textCreationScale = it.scale) }
         }
     }
 
@@ -111,7 +133,8 @@ class CanvasViewModel @Inject constructor(
                 drawingMode = null,
                 textInputPosition = null,
                 currentTextInput = "",
-                isColorPickerVisible = false, // Hide color picker when closing tool options
+                editingTextId = null,
+                isColorPickerVisible = false,
                 // Keep selection when closing options - user returns to selection/move mode
             )
         }
@@ -213,10 +236,33 @@ class CanvasViewModel @Inject constructor(
         val textToAdd = _state.value.currentTextInput.ifBlank { "Text" }
         val boardId = currentBoardId ?: return
         val scale = _state.value.textCreationScale ?: 1f
-        
-        // Adjust font size for zoom level to maintain visual size
+        val editingId = _state.value.editingTextId
+
+        if (editingId != null) {
+            // Update existing text element
+            _state.update { state ->
+                val updated = state.textElements.map { t ->
+                    if (t.id == editingId) t.copy(text = textToAdd) else t
+                }
+                state.copy(
+                    textInputPosition = null,
+                    currentTextInput = "",
+                    textCreationScale = null,
+                    editingTextId = null,
+                    textElements = updated,
+                    selectedItems = listOf(SelectedItem.TextItem(editingId))
+                )
+            }
+            viewModelScope.launch {
+                _state.value.textElements.find { it.id == editingId }?.let { text ->
+                    boardRepository.updateText(text, boardId)
+                }
+            }
+            return
+        }
+
+        // Create new text element
         val adjustedFontSize = _state.value.selectedFontSize / scale
-        
         val newText = TextData(
             id = System.currentTimeMillis().toString(),
             text = textToAdd,
@@ -224,19 +270,37 @@ class CanvasViewModel @Inject constructor(
             color = _state.value.selectedColor,
             fontSize = adjustedFontSize
         )
-        
+
         _state.update {
             it.copy(
                 textInputPosition = null,
                 currentTextInput = "",
                 textElements = it.textElements + newText,
-                textCreationScale = null // Reset after text creation
+                textCreationScale = null,
+                selectedItems = listOf(SelectedItem.TextItem(newText.id))
             )
         }
-        
-        // Save to database
+
         viewModelScope.launch {
             boardRepository.insertText(newText, boardId)
+        }
+    }
+
+    private fun onCanvasSizeChange(size: IntSize) {
+        _state.update { it.copy(canvasSize = size) }
+    }
+
+    private fun onEditSelectedText() {
+        val state = _state.value
+        val textItem = state.selectedItems.filterIsInstance<SelectedItem.TextItem>().singleOrNull() ?: return
+        val textData = state.textElements.find { it.id == textItem.id } ?: return
+        _state.update {
+            it.copy(
+                textInputPosition = textData.position,
+                currentTextInput = textData.text,
+                textCreationScale = it.scale,
+                editingTextId = textData.id
+            )
         }
     }
 
@@ -429,7 +493,14 @@ class CanvasViewModel @Inject constructor(
     }
 
     private fun onDeselect() {
-        _state.update { it.copy(selectedItems = emptyList()) }
+        _state.update {
+            it.copy(
+                selectedItems = emptyList(),
+                textInputPosition = null,
+                currentTextInput = "",
+                editingTextId = null
+            )
+        }
     }
 
     private fun onMoveSelectedItem(deltaX: Float, deltaY: Float) {
@@ -930,9 +1001,11 @@ sealed interface DrawingAction {
     data class OnTextInputChange(val text: String) : DrawingAction
     data class OnTextInputStart(val position: Offset, val scale: Float) : DrawingAction
     data object OnTextInputDone : DrawingAction
+    data object OnEditSelectedText : DrawingAction
 
     // Canvas actions
     data object OnClearCanvasClick : DrawingAction
+    data class OnCanvasSizeChange(val size: IntSize) : DrawingAction
     
     // Zoom/Pan actions
     data class OnZoomPanChange(val scale: Float, val panOffset: Offset) : DrawingAction

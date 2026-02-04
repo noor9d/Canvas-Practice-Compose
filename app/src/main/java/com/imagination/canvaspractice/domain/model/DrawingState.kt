@@ -2,6 +2,7 @@ package com.imagination.canvaspractice.domain.model
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.IntSize
 import com.imagination.canvaspractice.domain.constants.DrawingConstants
 import com.imagination.canvaspractice.domain.model.SelectedItem
 import com.imagination.canvaspractice.presentation.dashboard.model.Board
@@ -43,7 +44,11 @@ data class DrawingState(
     val currentTextInput: String = "",
     val textInputPosition: Offset? = null,
     val textCreationScale: Float? = null, // Store scale when text input starts for proper font size calculation
-    
+    val editingTextId: String? = null, // When set, text overlay is editing this element (update on done)
+
+    // Canvas size (reported by canvas for centering new text in ViewModel)
+    val canvasSize: IntSize = IntSize.Zero,
+
     // Zoom/Pan state (persisted to database)
     val scale: Float = 1f,
     val panOffset: Offset = Offset.Zero,

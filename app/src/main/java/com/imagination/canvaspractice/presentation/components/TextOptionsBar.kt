@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -33,6 +34,7 @@ import com.imagination.canvaspractice.ui.theme.CanvasPracticeTheme
  * @param onFontSizeChange Callback when font size is changed
  * @param onClose Callback when the close button is clicked
  * @param onDelete Optional callback when delete is clicked (e.g. when an item is selected); if null, delete icon is hidden
+ * @param onEdit Optional callback when edit is clicked (single text selected); if null, edit icon is hidden
  */
 @Composable
 fun TextOptionsBar(
@@ -43,6 +45,7 @@ fun TextOptionsBar(
     onFontSizeChange: (Float) -> Unit,
     onClose: () -> Unit,
     onDelete: (() -> Unit)? = null,
+    onEdit: (() -> Unit)? = null,
     showGroupButtons: Boolean = false,
     isGrouped: Boolean = false,
     onGroupClick: () -> Unit = {},
@@ -66,6 +69,15 @@ fun TextOptionsBar(
                     contentDescription = "Close",
                     tint = CanvasPracticeTheme.colorScheme.onBackground
                 )
+            }
+            if (onEdit != null) {
+                IconButton(onClick = onEdit) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit text",
+                        tint = CanvasPracticeTheme.colorScheme.onBackground
+                    )
+                }
             }
             if (onDelete != null) {
                 IconButton(onClick = onDelete) {

@@ -97,8 +97,9 @@ fun CanvasScreen(
                         currentLassoPath = state.currentLassoPath,
                         textInputPosition = state.textInputPosition,
                         textInput = state.currentTextInput,
-                        selectedColor = state.selectedColor,
-                        selectedFontSize = state.selectedFontSize,
+                        editingTextId = state.editingTextId,
+                        selectedColor = state.editingTextId?.let { id -> state.textElements.find { it.id == id }?.color } ?: state.selectedColor,
+                        selectedFontSize = state.editingTextId?.let { id -> state.textElements.find { it.id == id }?.fontSize?.let { it * state.scale } } ?: state.selectedFontSize,
                         initialScale = state.scale,
                         initialPanOffset = state.panOffset,
                         onTextInputChange = {
@@ -170,6 +171,7 @@ fun CanvasScreen(
                             val showGroupButtons = state.selectedItems.size >= 2
                             val groupIds = state.selectedItems.mapNotNull { state.itemGroups[it.id] }.distinct()
                             val isGrouped = showGroupButtons && groupIds.size == 1
+                            val singleTextSelected = state.selectedItems.size == 1 && state.selectedItems.first() is SelectedItem.TextItem
                             TextOptionsBar(
                                 selectedColor = selectedTextColor,
                                 fontSize = selectedTextFontSize,
@@ -185,6 +187,7 @@ fun CanvasScreen(
                                 onDelete = {
                                     viewModel.onAction(DrawingAction.OnDeleteSelectedItem)
                                 },
+                                onEdit = if (singleTextSelected) {{ viewModel.onAction(DrawingAction.OnEditSelectedText) }} else null,
                                 showGroupButtons = showGroupButtons,
                                 isGrouped = isGrouped,
                                 onGroupClick = { viewModel.onAction(DrawingAction.OnGroupItems) },

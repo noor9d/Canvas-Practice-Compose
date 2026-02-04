@@ -1,19 +1,20 @@
 package com.imagination.canvaspractice.presentation.canvas.components
 
+
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,17 +33,18 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,9 +55,9 @@ import com.imagination.canvaspractice.domain.constants.DrawingConstants.MIN_SCAL
 import com.imagination.canvaspractice.domain.model.CanvasItem
 import com.imagination.canvaspractice.domain.model.CanvasItemFactory
 import com.imagination.canvaspractice.domain.model.DrawingMode
-import com.imagination.canvaspractice.domain.model.SelectedItem
 import com.imagination.canvaspractice.domain.model.PathCanvasItem
 import com.imagination.canvaspractice.domain.model.PathData
+import com.imagination.canvaspractice.domain.model.SelectedItem
 import com.imagination.canvaspractice.domain.model.ShapeCanvasItem
 import com.imagination.canvaspractice.domain.model.ShapeData
 import com.imagination.canvaspractice.domain.model.TextCanvasItem
@@ -65,10 +67,10 @@ import com.imagination.canvaspractice.ui.theme.CanvasPracticeTheme
 import kotlinx.coroutines.delay
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sqrt
-import kotlin.math.min
-import kotlin.math.max
 
 private enum class ResizeHandle {
     TopLeft, TopCenter, TopRight, MiddleRight, BottomRight, BottomCenter, BottomLeft, MiddleLeft
@@ -174,6 +176,7 @@ private fun computeScaleFromHandle(
  * @param drawingMode The current drawing mode (null means no active mode)
  * @param textInputPosition Position where text input should appear (null if not showing)
  * @param textInput Current text input value
+ * @param editingTextId When set, this text element is being edited (overlay shown); do not draw it on canvas to avoid duplication
  * @param onTextInputChange Callback when text input changes
  * @param onTextInputDone Callback when text input is done (IME action)
  * @param onAction Callback for drawing actions
@@ -192,6 +195,7 @@ fun DrawingCanvas(
     currentLassoPath: List<Offset>? = null,
     textInputPosition: Offset?,
     textInput: String,
+    editingTextId: String? = null,
     selectedColor: Color,
     selectedFontSize: Float,
     initialScale: Float = 1f,
@@ -312,6 +316,9 @@ fun DrawingCanvas(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .onSizeChanged {
+                    onAction(DrawingAction.OnCanvasSizeChange(it))
+                }
                 .pointerInput(drawingMode, scale, offset, selectedItems, isLassoMode) {
                     val canvasItems = canvasItemsRef.value
                     when {
@@ -525,16 +532,18 @@ fun DrawingCanvas(
                 val viewportBottomRight = screenToCanvas(Offset(size.width, size.height))
                 val viewport = Rect(viewportTopLeft, viewportBottomRight)
 
-                // Draw all items
+                // Draw all items (skip the text currently being edited so it's not duplicated with the overlay)
                 canvasItems.forEach { item ->
+                    if (editingTextId != null && item.getItemType() is SelectedItem.TextItem && (item.getItemType() as SelectedItem.TextItem).id == editingTextId) return@forEach
                     if (item.isVisible(viewport)) {
                         item.draw(this, textMeasurer)
                     }
                 }
 
-                // Draw one combined selection box wrapping all selected/grouped items
+                // Draw one combined selection box wrapping all selected/grouped items (exclude text being edited)
                 var combinedSelectionBounds: Rect? = null
                 selectedItems.forEach { selected ->
+                    if (editingTextId != null && selected is SelectedItem.TextItem && selected.id == editingTextId) return@forEach
                     val item = canvasItems.find { it.getItemType() == selected }
                         ?.takeIf { it.isVisible(viewport) }
                     if (item != null) {
@@ -632,47 +641,45 @@ fun DrawingCanvas(
 
         // Text input overlay OUTSIDE transformed Box so it stays at screen position
         textInputPosition?.let { canvasPosition ->
-            // Convert canvas position to screen position for overlay
-            val screenPosition = Offset(
-                x = canvasPosition.x * scale + offset.x,
-                y = canvasPosition.y * scale + offset.y
-            )
-            val offsetX = with(density) { screenPosition.x.toDp() }
-            val offsetY = with(density) { screenPosition.y.toDp() }
+            // Convert canvas position to screen position for overlay (y only; x uses full width for centering)
+            val screenY = canvasPosition.y * scale + offset.y
+            val offsetY = with(density) { screenY.toDp() }
 
-            OutlinedTextField(
-                value = textInput,
-                onValueChange = onTextInputChange,
+            Box(
                 modifier = Modifier
-                    .offset(x = offsetX, y = offsetY)
-                    .widthIn(max = 200.dp)
-                    .focusRequester(focusRequester),
-                textStyle = TextStyle(
-                    color = selectedColor,
-                    fontSize = selectedFontSize.sp
-                ),
-                placeholder = {
+                    .fillMaxWidth()
+                    .offset(y = offsetY),
+                contentAlignment = Alignment.Center
+            ) {
+                if (textInput.isEmpty()) {
                     Text(
                         text = "Type something",
-                        color = CanvasPracticeTheme.colorScheme.surface.copy(alpha = 0.5f)
+                        color = CanvasPracticeTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        fontSize = selectedFontSize.sp
                     )
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(
-                    onDone = {
-                        onTextInputDone()
-                    }
-                ),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                    focusedTextColor = selectedColor,
-                    unfocusedTextColor = selectedColor
+                }
+                BasicTextField(
+                    value = textInput,
+                    onValueChange = onTextInputChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester),
+                    textStyle = TextStyle(
+                        color = selectedColor,
+                        fontSize = selectedFontSize.sp,
+                        textAlign = TextAlign.Center
+                    ),
+                    cursorBrush = SolidColor(CanvasPracticeTheme.colorScheme.primary),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = { onTextInputDone() }
+                    ),
+                    decorationBox = { innerTextField -> innerTextField() }
                 )
-            )
+            }
         }
     }
 }
