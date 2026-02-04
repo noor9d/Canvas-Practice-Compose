@@ -127,8 +127,16 @@ fun CanvasScreen(
                     when {
                         // Selection mode (single or multi): show bar for selected type with delete
                         state.selectedItems.any { it is SelectedItem.PathItem } -> {
+                            val selectedPathColor = state.selectedItems
+                                .filterIsInstance<SelectedItem.PathItem>()
+                                .firstOrNull()
+                                ?.let { pathItem -> state.paths.find { it.id == pathItem.id }?.color }
+                                ?: state.selectedColor
+                            val showGroupButtons = state.selectedItems.size >= 2
+                            val groupIds = state.selectedItems.mapNotNull { state.itemGroups[it.id] }.distinct()
+                            val isGrouped = showGroupButtons && groupIds.size == 1
                             PenOptionsBar(
-                                selectedColor = state.selectedColor,
+                                selectedColor = selectedPathColor,
                                 onColorClick = {
                                     viewModel.onAction(DrawingAction.OnShowColorPicker)
                                 },
@@ -141,13 +149,30 @@ fun CanvasScreen(
                                 onLassoClick = {
                                     viewModel.onAction(DrawingAction.OnLassoModeChange)
                                 },
-                                isLassoMode = state.isLassoMode
+                                isLassoMode = state.isLassoMode,
+                                showGroupButtons = showGroupButtons,
+                                isGrouped = isGrouped,
+                                onGroupClick = {
+                                    viewModel.onAction(DrawingAction.OnGroupItems)
+                                },
+                                onUngroupClick = {
+                                    viewModel.onAction(DrawingAction.OnUngroupItems)
+                                }
                             )
                         }
                         state.selectedItems.any { it is SelectedItem.TextItem } -> {
+                            val firstSelectedText = state.selectedItems
+                                .filterIsInstance<SelectedItem.TextItem>()
+                                .firstOrNull()
+                                ?.let { textItem -> state.textElements.find { it.id == textItem.id } }
+                            val selectedTextFontSize = firstSelectedText?.fontSize ?: state.selectedFontSize
+                            val selectedTextColor = firstSelectedText?.color ?: state.selectedColor
+                            val showGroupButtons = state.selectedItems.size >= 2
+                            val groupIds = state.selectedItems.mapNotNull { state.itemGroups[it.id] }.distinct()
+                            val isGrouped = showGroupButtons && groupIds.size == 1
                             TextOptionsBar(
-                                selectedColor = state.selectedColor,
-                                fontSize = state.selectedFontSize,
+                                selectedColor = selectedTextColor,
+                                fontSize = selectedTextFontSize,
                                 onColorClick = {
                                     viewModel.onAction(DrawingAction.OnShowColorPicker)
                                 },
@@ -159,12 +184,24 @@ fun CanvasScreen(
                                 },
                                 onDelete = {
                                     viewModel.onAction(DrawingAction.OnDeleteSelectedItem)
-                                }
+                                },
+                                showGroupButtons = showGroupButtons,
+                                isGrouped = isGrouped,
+                                onGroupClick = { viewModel.onAction(DrawingAction.OnGroupItems) },
+                                onUngroupClick = { viewModel.onAction(DrawingAction.OnUngroupItems) }
                             )
                         }
                         state.selectedItems.any { it is SelectedItem.ShapeItem } -> {
+                            val selectedShapeColor = state.selectedItems
+                                .filterIsInstance<SelectedItem.ShapeItem>()
+                                .firstOrNull()
+                                ?.let { shapeItem -> state.shapeElements.find { it.id == shapeItem.id }?.color }
+                                ?: state.selectedColor
+                            val showGroupButtons = state.selectedItems.size >= 2
+                            val groupIds = state.selectedItems.mapNotNull { state.itemGroups[it.id] }.distinct()
+                            val isGrouped = showGroupButtons && groupIds.size == 1
                             ShapeOptionsBar(
-                                selectedColor = state.selectedColor,
+                                selectedColor = selectedShapeColor,
                                 selectedShapeType = state.selectedShapeType,
                                 onColorClick = {
                                     viewModel.onAction(DrawingAction.OnShowColorPicker)
@@ -177,7 +214,11 @@ fun CanvasScreen(
                                 },
                                 onDelete = {
                                     viewModel.onAction(DrawingAction.OnDeleteSelectedItem)
-                                }
+                                },
+                                showGroupButtons = showGroupButtons,
+                                isGrouped = isGrouped,
+                                onGroupClick = { viewModel.onAction(DrawingAction.OnGroupItems) },
+                                onUngroupClick = { viewModel.onAction(DrawingAction.OnUngroupItems) }
                             )
                         }
                         state.drawingMode == DrawingMode.PEN -> {

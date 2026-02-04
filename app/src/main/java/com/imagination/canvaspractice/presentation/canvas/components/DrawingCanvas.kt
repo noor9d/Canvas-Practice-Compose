@@ -29,7 +29,10 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
@@ -91,11 +94,14 @@ private const val RESIZE_HANDLE_DOT_RADIUS = 16f
 /** Thickness of the primary-colored ring (border) around each dot. */
 private const val RESIZE_HANDLE_DOT_BORDER_THICKNESS = 3f
 
-private fun hitTestResizeHandle(bounds: Rect, point: Offset): ResizeHandle? =
-    ResizeHandle.entries.firstOrNull { handle ->
+private fun hitTestResizeHandle(bounds: Rect, point: Offset, scale: Float): ResizeHandle? {
+    val hitRadiusCanvas = (RESIZE_HANDLE_HIT_RADIUS / scale.coerceAtLeast(0.1f)).coerceAtLeast(8f)
+    val hitRadiusSq = hitRadiusCanvas * hitRadiusCanvas
+    return ResizeHandle.entries.firstOrNull { handle ->
         val pos = handle.position(bounds)
-        (point.x - pos.x) * (point.x - pos.x) + (point.y - pos.y) * (point.y - pos.y) <= RESIZE_HANDLE_HIT_RADIUS * RESIZE_HANDLE_HIT_RADIUS
+        (point.x - pos.x) * (point.x - pos.x) + (point.y - pos.y) * (point.y - pos.y) <= hitRadiusSq
     }
+}
 
 private fun computeScaleFromHandle(
     handle: ResizeHandle,
@@ -329,8 +335,8 @@ fun DrawingCanvas(
                                     }
                                 }
                                 val box = combinedBounds?.inflate(RESIZE_HANDLE_BOX_PADDING)
-                                val hitHandle = box?.let { hitTestResizeHandle(it, canvasOffset) }
-                                if (hitHandle != null && box != null) {
+                                val hitHandle = box?.let { hitTestResizeHandle(it, canvasOffset, scale) }
+                                if (hitHandle != null) {
                                     onAction(DrawingAction.OnResizeStart)
                                     while (true) {
                                         val event = awaitPointerEvent(PointerEventPass.Initial)
@@ -350,7 +356,7 @@ fun DrawingCanvas(
                                     return@awaitEachGesture
                                 }
                                 // Move only when drag starts inside the selection box and NOT in handle zone (dots)
-                                val inHandleZone = box?.let { hitTestResizeHandle(it, canvasOffset) != null } == true
+                                val inHandleZone = box?.let { hitTestResizeHandle(it, canvasOffset, scale) != null } == true
                                 val tapInsideSelectionBox = combinedBounds != null
                                     && combinedBounds.contains(canvasOffset)
                                     && !inHandleZone
@@ -526,13 +532,12 @@ fun DrawingCanvas(
                     }
                 }
 
-                // Draw selection for each selected item and compute combined bounds for handles
+                // Draw one combined selection box wrapping all selected/grouped items
                 var combinedSelectionBounds: Rect? = null
                 selectedItems.forEach { selected ->
                     val item = canvasItems.find { it.getItemType() == selected }
                         ?.takeIf { it.isVisible(viewport) }
                     if (item != null) {
-                        item.drawSelection(this, selectionColor, textMeasurer)
                         val bounds =
                             (item as? TextCanvasItem)?.getBounds(textMeasurer) ?: item.getBounds()
                         combinedSelectionBounds = if (combinedSelectionBounds == null) bounds
@@ -544,20 +549,32 @@ fun DrawingCanvas(
                         )
                     }
                 }
+                combinedSelectionBounds?.let { bounds ->
+                    val pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 4f), 0f)
+                    drawRect(
+                        color = selectionColor,
+                        topLeft = Offset(bounds.left, bounds.top),
+                        size = Size(bounds.width, bounds.height),
+                        style = Stroke(width = 2f, pathEffect = pathEffect)
+                    )
+                }
 
                 // Draw resize handle dots outside the selection box (with padding to avoid move/resize conflict)
+                // Use radius/scale so dots stay same screen size regardless of zoom
                 combinedSelectionBounds?.let { bounds ->
                     val box = bounds.inflate(RESIZE_HANDLE_BOX_PADDING)
+                    val dotRadius = (RESIZE_HANDLE_DOT_RADIUS / scale.coerceAtLeast(0.1f)).coerceAtLeast(2f)
+                    val innerRadius = (RESIZE_HANDLE_DOT_RADIUS - RESIZE_HANDLE_DOT_BORDER_THICKNESS) / scale.coerceAtLeast(0.1f)
                     ResizeHandle.entries.forEach { handle ->
                         val pos = handle.position(box)
                         drawCircle(
                             color = selectionColor.copy(alpha = 0.5f),
-                            radius = RESIZE_HANDLE_DOT_RADIUS,
+                            radius = dotRadius,
                             center = pos
                         )
                         drawCircle(
                             color = Color.White,
-                            radius = RESIZE_HANDLE_DOT_RADIUS - RESIZE_HANDLE_DOT_BORDER_THICKNESS,
+                            radius = innerRadius.coerceAtLeast(1f),
                             center = pos
                         )
                     }
@@ -573,7 +590,7 @@ fun DrawingCanvas(
                         drawPath(
                             path = lassoPath,
                             color = selectionColor,
-                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f)
+                            style = Stroke(width = 2f)
                         )
                     }
                 }

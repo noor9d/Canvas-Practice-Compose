@@ -36,7 +36,8 @@ data class ShapeEntity(
     val endPosition: String, // Stored as String, converted using OffsetConverter
     val color: Long, // Stored as Long, converted using ColorConverter
     val strokeWidth: Float,
-    val isFilled: Boolean = false
+    val isFilled: Boolean = false,
+    val groupId: String? = null
 ) {
     companion object {
         fun fromDomain(
@@ -47,7 +48,8 @@ data class ShapeEntity(
             endPosition: Offset,
             color: Color,
             strokeWidth: Float,
-            isFilled: Boolean = false
+            isFilled: Boolean = false,
+            groupId: String? = null
         ): ShapeEntity {
             val colorConverter = ColorConverter()
             val offsetConverter = OffsetConverter()
@@ -60,7 +62,8 @@ data class ShapeEntity(
                 endPosition = offsetConverter.fromOffset(endPosition),
                 color = colorConverter.fromColor(color),
                 strokeWidth = strokeWidth,
-                isFilled = isFilled
+                isFilled = isFilled,
+                groupId = groupId
             )
         }
 
@@ -75,7 +78,8 @@ data class ShapeEntity(
                 endPosition = offsetConverter.toOffset(shapeEntity.endPosition),
                 color = colorConverter.toColor(shapeEntity.color),
                 strokeWidth = shapeEntity.strokeWidth,
-                isFilled = shapeEntity.isFilled
+                isFilled = shapeEntity.isFilled,
+                groupId = shapeEntity.groupId
             )
         }
     }

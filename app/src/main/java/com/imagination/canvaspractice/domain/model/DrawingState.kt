@@ -53,7 +53,10 @@ data class DrawingState(
 
     // Lasso tool: when true, next stroke on canvas selects paths inside the drawn shape
     val isLassoMode: Boolean = false,
-    val currentLassoPath: List<Offset>? = null
+    val currentLassoPath: List<Offset>? = null,
+
+    // Grouping: itemId -> groupId (items with same groupId are grouped)
+    val itemGroups: Map<String, String> = emptyMap()
 ) {
     /** Single selected item when exactly one is selected; null otherwise. */
     val selectedItem: SelectedItem? get() = selectedItems.singleOrNull()

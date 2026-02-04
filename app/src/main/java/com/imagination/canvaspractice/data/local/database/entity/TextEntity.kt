@@ -32,7 +32,8 @@ data class TextEntity(
     val text: String,
     val position: String, // Stored as String, converted using OffsetConverter
     val color: Long, // Stored as Long, converted using ColorConverter
-    val fontSize: Float
+    val fontSize: Float,
+    val groupId: String? = null
 ) {
     companion object {
         fun fromDomain(
@@ -41,7 +42,8 @@ data class TextEntity(
             text: String,
             position: Offset,
             color: Color,
-            fontSize: Float
+            fontSize: Float,
+            groupId: String? = null
         ): TextEntity {
             val colorConverter = ColorConverter()
             val offsetConverter = OffsetConverter()
@@ -51,7 +53,8 @@ data class TextEntity(
                 text = text,
                 position = offsetConverter.fromOffset(position),
                 color = colorConverter.fromColor(color),
-                fontSize = fontSize
+                fontSize = fontSize,
+                groupId = groupId
             )
         }
 
@@ -63,7 +66,8 @@ data class TextEntity(
                 text = textEntity.text,
                 position = offsetConverter.toOffset(textEntity.position),
                 color = colorConverter.toColor(textEntity.color),
-                fontSize = textEntity.fontSize
+                fontSize = textEntity.fontSize,
+                groupId = textEntity.groupId
             )
         }
     }

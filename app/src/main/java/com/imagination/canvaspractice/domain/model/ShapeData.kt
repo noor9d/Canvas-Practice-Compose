@@ -6,14 +6,8 @@ import androidx.compose.ui.graphics.Color
 
 /**
  * Represents a shape element on the canvas
- * 
- * @param id Unique identifier for this shape
- * @param type The type of shape (rectangle, circle, etc.)
- * @param startPosition The starting position of the shape
- * @param endPosition The ending position of the shape
- * @param color The color of the shape
- * @param strokeWidth The width of the stroke in pixels
- * @param isFilled Whether the shape should be filled or just outlined
+ *
+ * @param groupId Optional group id; items with the same non-null groupId are grouped
  */
 data class ShapeData(
     val id: String,
@@ -22,7 +16,8 @@ data class ShapeData(
     val endPosition: Offset,
     val color: Color,
     val strokeWidth: Float,
-    val isFilled: Boolean = false
+    val isFilled: Boolean = false,
+    val groupId: String? = null
 ) {
     /**
      * Calculates the size of the shape based on start and end positions

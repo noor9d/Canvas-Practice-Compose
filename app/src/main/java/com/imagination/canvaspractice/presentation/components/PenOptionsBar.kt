@@ -23,10 +23,14 @@ import com.imagination.canvaspractice.ui.theme.CanvasPracticeTheme
 
 /**
  * Options bar for pen drawing mode
- * Shows lasso tool, color indicator, close and optional delete
+ * Shows lasso tool, group/ungroup, color indicator, close and optional delete
  *
  * @param onLassoClick Callback when lasso tool is clicked (toggle multi-selection mode)
  * @param isLassoMode True when lasso mode is active
+ * @param showGroupButtons True when multiple items selected (show group or ungroup icon)
+ * @param isGrouped True when selected items are grouped (show ungroup), else show group
+ * @param onGroupClick Callback when group icon is clicked
+ * @param onUngroupClick Callback when ungroup icon is clicked
  */
 @Composable
 fun PenOptionsBar(
@@ -36,7 +40,11 @@ fun PenOptionsBar(
     onClose: () -> Unit,
     onDelete: (() -> Unit)? = null,
     onLassoClick: () -> Unit = {},
-    isLassoMode: Boolean = false
+    isLassoMode: Boolean = false,
+    showGroupButtons: Boolean = false,
+    isGrouped: Boolean = false,
+    onGroupClick: () -> Unit = {},
+    onUngroupClick: () -> Unit = {}
 ) {
     Row(
         modifier = modifier
@@ -80,6 +88,25 @@ fun PenOptionsBar(
                     contentDescription = "Lasso selection",
                     colorFilter = ColorFilter.tint(CanvasPracticeTheme.colorScheme.onBackground)
                 )
+            }
+            if (showGroupButtons) {
+                if (isGrouped) {
+                    IconButton(onClick = onUngroupClick) {
+                        Image(
+                            painter = painterResource(R.drawable.ungroup_items_svgrepo_com),
+                            contentDescription = "Ungroup items",
+                            colorFilter = ColorFilter.tint(CanvasPracticeTheme.colorScheme.onBackground)
+                        )
+                    }
+                } else {
+                    IconButton(onClick = onGroupClick) {
+                        Image(
+                            painter = painterResource(R.drawable.group_items_svgrepo_com),
+                            contentDescription = "Group items",
+                            colorFilter = ColorFilter.tint(CanvasPracticeTheme.colorScheme.onBackground)
+                        )
+                    }
+                }
             }
         }
         ColorIndicator(
